@@ -21,7 +21,7 @@
 
 %define		basever		2.6.39
 %define		postver		.4
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -83,9 +83,9 @@ Patch3:		0001-usb-quirk-for-Logitech-webcam.patch
 # BFS
 Patch100:	http://ck.kolivas.org/patches/bfs/2.6.39/2.6.39-sched-bfs-406.patch
 # BFQ
-Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v2-for-2.6.39.patch
-Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v2-2.6.39.patch
-Patch112:	0003-block-introduce-the-BFQ-v2-I-O-sched-for-2.6.39.patch
+Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3-for-2.6.39.patch
+Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3-2.6.39.patch
+Patch112:	0003-block-introduce-the-BFQ-v3-I-O-sched-for-2.6.39.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod
