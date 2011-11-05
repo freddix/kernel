@@ -19,8 +19,8 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		2.6.39
-%define		postver		.4
+%define		basever		3.1
+%define		postver		.0
 %define		rel		1
 
 %if %{with perf}
@@ -55,10 +55,10 @@ Release:	%{rel}
 Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
-Source0:	http://www.kernel.org/pub/linux/kernel/v2.6/linux-%{basever}.tar.bz2
+Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1aab7a741abe08d42e8eccf20de61e05
-%if "%{postver}" != "%{nil}"
-Source1:	http://www.kernel.org/pub/linux/kernel/v2.6/patch-%{version}.bz2
+%if "%{postver}" != ".0"
+Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.bz2
 # Source1-md5:	ff5eb7323c054a128d2922bde3297ed5
 %endif
 #
@@ -81,11 +81,11 @@ Patch2:		kernel-e1000e-control-mdix.patch
 Patch3:		0001-usb-quirk-for-Logitech-webcam.patch
 
 # BFS
-Patch100:	http://ck.kolivas.org/patches/bfs/2.6.39/2.6.39-sched-bfs-406.patch
+Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-414.patch
 # BFQ
-Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v2-for-2.6.39.patch
-Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v2-2.6.39.patch
-Patch112:	0003-block-introduce-the-BFQ-v2-I-O-sched-for-2.6.39.patch
+#Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v2-for-2.6.39.patch
+#Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v2-2.6.39.patch
+#Patch112:	0003-block-introduce-the-BFQ-v2-I-O-sched-for-2.6.39.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod
@@ -261,7 +261,7 @@ ln -s %{SOURCE7} kernel-module-build.pl
 ln -s %{SOURCE10} Makefile
 cd linux-%{basever}
 
-%if "%{postver}" != "%{nil}"
+%if "%{postver}" != ".0"
 %{__bzip2} -dc %{SOURCE1} | patch -p1 -s
 %endif
 
@@ -279,9 +279,9 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
 %if %{with bfq}
-%patch110 -p1
-%patch111 -p1
-%patch112 -p1
+#%patch110 -p1
+#%patch111 -p1
+#%patch112 -p1
 %endif
 
 # Fix EXTRAVERSION in main Makefile
