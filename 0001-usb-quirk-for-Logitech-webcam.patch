@@ -1,0 +1,29 @@
+From 147f12ef7a0e2aab700847cf0ee1033405fa732a Mon Sep 17 00:00:00 2001
+From: Oliver Neukum <oliver@neukum.org>
+Date: Wed, 6 Jul 2011 00:17:43 +0200
+Subject: [PATCH] usb: quirk for Logitech webcam
+
+Revealed by new runtime PM code for USB audio.
+
+Signed-off-by: Oliver Neukum <oneukum@suse.de>
+---
+ drivers/usb/core/quirks.c |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/usb/core/quirks.c b/drivers/usb/core/quirks.c
+index 81ce6a8..6c593f9 100644
+--- a/drivers/usb/core/quirks.c
++++ b/drivers/usb/core/quirks.c
+@@ -41,6 +41,9 @@ static const struct usb_device_id usb_quirk_list[] = {
+ 	/* Logitech Harmony 700-series */
+ 	{ USB_DEVICE(0x046d, 0xc122), .driver_info = USB_QUIRK_DELAY_INIT },
+ 
++	/* Logitech Webcam C270 */
++	{ USB_DEVICE(0x046d, 0x0825), .driver_info = USB_QUIRK_RESET_RESUME },
++
+ 	/* Philips PSC805 audio device */
+ 	{ USB_DEVICE(0x0471, 0x0155), .driver_info = USB_QUIRK_RESET_RESUME },
+ 
+-- 
+1.7.1
+
