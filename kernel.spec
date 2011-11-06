@@ -12,7 +12,7 @@
 
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
-%bcond_without	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/2.6.39/README.BFQ
+%bcond_with	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/2.6.39/README.BFQ
 %bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
@@ -399,10 +399,13 @@ BuildConfig() {
 	CONFIG_SCHED_AUTOGROUP=y
 %endif
 %if %{with bfq}
+	CONFIG_IOSCHED_BFQ=y
+	CONFIG_CGROUP_BFQIO=y
 	CONFIG_DEFAULT_CFQ=n
 	CONFIG_DEFAULT_BFQ=y
 	CONFIG_DEFAULT_IOSCHED="bfq"
 %else
+	CONFIG_DEFAULT_CFQ=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
 EOCONFIG
