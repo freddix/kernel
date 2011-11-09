@@ -12,7 +12,7 @@
 
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
-%bcond_with	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/2.6.39/README.BFQ
+%bcond_without	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/2.6.39/README.BFQ
 %bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
@@ -21,7 +21,7 @@
 
 %define		basever		3.1
 %define		postver		.0
-%define		rel		2
+%define		rel		3
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -79,13 +79,12 @@ Patch1:		kernel-overlayfs.patch
 Patch2:		kernel-e1000e-control-mdix.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=35922
 Patch3:		0001-usb-quirk-for-Logitech-webcam.patch
-
 # BFS
 Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-414.patch
 # BFQ
-#Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v2-for-2.6.39.patch
-#Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v2-2.6.39.patch
-#Patch112:	0003-block-introduce-the-BFQ-v2-I-O-sched-for-2.6.39.patch
+Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r1-for-3.1.patch
+Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r1-3.1.patch
+Patch112:	0003-block-introduce-the-BFQ-v3r1-I-O-sched-for-3.1.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod
@@ -270,6 +269,7 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
 %patch0 -p1
+# needs update!
 #%patch1 -p1
 %patch2 -p1
 %patch3 -p1
@@ -279,14 +279,13 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
 %if %{with bfq}
-#%patch110 -p1
-#%patch111 -p1
-#%patch112 -p1
+%patch110 -p1
+%patch111 -p1
+%patch112 -p1
 %endif
 
 # Fix EXTRAVERSION in main Makefile
 sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
-#sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{?alt_kernel:_%{alt_kernel}}#g' Makefile
 
 # cleanup backups after patching
 find '(' -name '*~' -o -name '*.orig' -o -name '.gitignore' ')' -print0 | xargs -0 -r -l512 rm -f
