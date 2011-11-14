@@ -20,8 +20,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.1
-%define		postver		.0
-%define		rel		3
+%define		postver		.1
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -56,10 +56,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	1aab7a741abe08d42e8eccf20de61e05
+# Source0-md5:	edbdc798f23ae0f8045c82f6fa22c536
 %if "%{postver}" != ".0"
-Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.bz2
-# Source1-md5:	ff5eb7323c054a128d2922bde3297ed5
+Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
+# Source1-md5:	2bf7eb28a58238e1a062fa7393bf7824
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -74,13 +74,14 @@ Source10:	kernel.make
 #
 # patches
 Patch0:		kernel-modpost.patch
+# https://dev.openwrt.org/export/27940/trunk/target/linux/generic/patches-3.1/100-overlayfs_v11.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=35922
 Patch3:		0001-usb-quirk-for-Logitech-webcam.patch
 # BFS
-Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-414.patch
+Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
 # BFQ
 Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r1-for-3.1.patch
 Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r1-3.1.patch
@@ -261,7 +262,7 @@ ln -s %{SOURCE10} Makefile
 cd linux-%{basever}
 
 %if "%{postver}" != ".0"
-%{__bzip2} -dc %{SOURCE1} | patch -p1 -s
+xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
 %if %{with laptop}
@@ -269,8 +270,7 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
 %patch0 -p1
-# needs update!
-#%patch1 -p1
+%patch1 -p1
 %patch2 -p1
 %patch3 -p1
 
@@ -318,6 +318,7 @@ EOF
 BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
+	CONFIG_OVERLAYFS_FS=m
 %if %{with laptop}
 	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=y
 	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=n
