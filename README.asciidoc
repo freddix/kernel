@@ -1,0 +1,8 @@
+Packages
+========
+Fryderyk Dziarmagowski <freddy@freddix.org>
+v1.0, November 2011
+
+Freddix kernel repository
+-------------------------
+
