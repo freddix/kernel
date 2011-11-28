@@ -20,8 +20,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.1
-%define		postver		.2
-%define		rel		1
+%define		postver		.3
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -59,7 +59,7 @@ Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	edbdc798f23ae0f8045c82f6fa22c536
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	7ac42443a734c9102143944828ea6715
+# Source1-md5:	d5a9093f12187098eee659eeeb071421
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -78,8 +78,8 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# https://bugzilla.kernel.org/show_bug.cgi?id=35922
-Patch3:		0001-usb-quirk-for-Logitech-webcam.patch
+# lkml: https://lkml.org/lkml/2011/11/27/224
+Patch3:		fix-usb-regression.patch
 # BFS
 Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
 # BFQ
