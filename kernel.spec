@@ -21,7 +21,7 @@
 
 %define		basever		2.6.39
 %define		postver		.4
-%define		rel		2
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -39,7 +39,7 @@
 %if %{with laptop}
 %define		alt_kernel	laptop%{?with_pae:-pae}
 %else
-%define		alt_kernel	std%{?with_pae:-pae}%{?with_latencytop:-ltop}
+%define		alt_kernel	s2639x%{?with_pae:-pae}%{?with_latencytop:-ltop}
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
@@ -55,7 +55,7 @@ Release:	%{rel}
 Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
-Source0:	http://www.kernel.org/pub/linux/kernel/v2.6/linux-%{basever}.tar.bz2
+Source0:	http://www.kernel.org/pub/linux/kernel/v2.6/linux-%{basever}.tar.xz
 # Source0-md5:	1aab7a741abe08d42e8eccf20de61e05
 %if "%{postver}" != "%{nil}"
 Source1:	http://www.kernel.org/pub/linux/kernel/v2.6/patch-%{version}.bz2
