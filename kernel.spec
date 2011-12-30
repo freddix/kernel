@@ -10,17 +10,18 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
+%bcond_with	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/3.0.0/README.BFQ
+%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
-%bcond_without	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/2.6.39/README.BFQ
-%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_without	rt		# real time kernel
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.1
-%define		postver		.3
+%define		basever		3.0
+%define		postver		.14
 %define		rel		2
 
 %if %{with perf}
@@ -34,12 +35,13 @@
 %if %{with latencytop}
 %unglobal	with_bfs
 %unglobal	with_bfq
+%unglobal	with_rt
 %endif
 
 %if %{with laptop}
 %define		alt_kernel	laptop%{?with_pae:-pae}
 %else
-%define		alt_kernel	std%{?with_pae:-pae}%{?with_latencytop:-ltop}
+%define		alt_kernel	s30x%{?with_pae:-pae}%{?with_latencytop:-ltop}%{?with_rt:-rt}
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
@@ -56,10 +58,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	edbdc798f23ae0f8045c82f6fa22c536
+# Source0-md5:	ecf932280e2441bdd992423ef3d55f8f
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	d5a9093f12187098eee659eeeb071421
+# Source1-md5:	2161fb86bef3d33c1ddede73797e2f2c
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -68,24 +70,22 @@ Source6:	kernel-config.awk
 Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
-# TOI
-#Source100:	http://tuxonice.net/files/tuxonice-3.2-for-%{basever}.patch.bz2
-# Source100-md5:	e0e0bb351ff773cf3ad80a65b6671c51
-#
 # patches
 Patch0:		kernel-modpost.patch
-# https://dev.openwrt.org/export/27940/trunk/target/linux/generic/patches-3.1/100-overlayfs_v11.patch
+# https://dev.openwrt.org/export/27940/trunk/target/linux/generic/patches-3.0/100-overlayfs_v10.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# lkml: https://lkml.org/lkml/2011/11/27/224
-Patch3:		fix-usb-regression.patch
 # BFS
-Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
+Patch100:	http://ck.kolivas.org/patches/bfs/3.0.0/3.0-sched-bfs-413.patch
 # BFQ
-Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r1-for-3.1.patch
-Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r1-3.1.patch
-Patch112:	0003-block-introduce-the-BFQ-v3r1-I-O-sched-for-3.1.patch
+# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/3.0.0
+Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3-for-3.0.patch
+Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3-3.0.patch
+Patch112:	0003-block-introduce-the-BFQ-v3-I-O-sched-for-3.0.patch
+# http://kernel.org/pub/linux/kernel/projects/rt/3.0
+Patch120:	patch-3.0.14-rt31.patch
+#
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod
@@ -272,7 +272,6 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
-%patch3 -p1
 
 %if %{with bfs}
 %patch100 -p1
@@ -282,6 +281,10 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %patch110 -p1
 %patch111 -p1
 %patch112 -p1
+%endif
+
+%if %{with rt}
+%patch120 -p1
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -340,22 +343,6 @@ BuildConfig() {
 	CONFIG_TRACING=y
 	CONFIG_CONTEXT_SWITCH_TRACER=y
 	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
-	%if 0
-	CONFIG_TOI=y
-	CONFIG_TOI_CORE=y
-	CONFIG_TOI_CRYPTO=y
-	CONFIG_TOI_USERUI=y
-	CONFIG_TOI_USERUI_DEFAULT_PATH="/sbin/tuxoniceui_text"
-	CONFIG_TOI_REPLACE_SWSUSP=y
-	CONFIG_TOI_DEFAULT_WAIT=25
-	CONFIG_TOI_DEFAULT_EXTRA_PAGES_ALLOWANCE=2000
-	CONFIG_TOI_FILE=y
-	CONFIG_TOI_SWAP=y
-	CONFIG_TOI_KEEP_IMAGE=n
-	CONFIG_TOI_IGNORE_LATE_INITCALL=n
-	CONFIG_TOI_CHECKSUM=n
-	CONFIG_CRYPTO_LZF=m
-	%endif
 %else
 	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=n
 	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
@@ -407,6 +394,17 @@ BuildConfig() {
 %else
 	CONFIG_DEFAULT_CFQ=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
+%endif
+%if %{with rt}
+	CONFIG_PREEMPT_RT_BASE=y
+	CONFIG_PREEMPT_RT_FULL=y
+	CONFIG_TRANSPARENT_HUGEPAGE=n
+	CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n
+%else
+	CONFIG_PREEMPT=y
+	CONFIG_PREEMPT_COUNT=y
+	CONFIG_TRANSPARENT_HUGEPAGE=y
+	CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=y
 %endif
 EOCONFIG
 
