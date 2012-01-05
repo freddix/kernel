@@ -39,7 +39,7 @@
 %if %{with laptop}
 %define		alt_kernel	laptop%{?with_pae:-pae}
 %else
-%define		alt_kernel	std%{?with_pae:-pae}%{?with_latencytop:-ltop}
+%define		alt_kernel	s31x%{?with_pae:-pae}%{?with_latencytop:-ltop}
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
