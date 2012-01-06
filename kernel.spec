@@ -13,9 +13,9 @@
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 
-%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
@@ -267,7 +267,7 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
 %patch0 -p1
-%patch1 -p1
+#%patch1 -p1
 %patch2 -p1
 
 %if %{with bfs}
@@ -396,12 +396,14 @@ BuildConfig() {
 %endif
 %if %{with bfq}
 	CONFIG_IOSCHED_BFQ=y
+	CONFIG_IOSCHED_CFQ=m
 	CONFIG_CGROUP_BFQIO=y
 	CONFIG_DEFAULT_CFQ=n
 	CONFIG_DEFAULT_BFQ=y
 	CONFIG_DEFAULT_IOSCHED="bfq"
 %else
 	CONFIG_DEFAULT_CFQ=y
+	CONFIG_IOSCHED_CFQ=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
 EOCONFIG
