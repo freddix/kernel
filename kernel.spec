@@ -20,8 +20,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.1
-%define		postver		.3
-%define		rel		2
+%define		postver		.7
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -59,7 +59,7 @@ Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	edbdc798f23ae0f8045c82f6fa22c536
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	d5a9093f12187098eee659eeeb071421
+# Source1-md5:	499626638e433ffc77f938d0bc63a041
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -78,8 +78,6 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# lkml: https://lkml.org/lkml/2011/11/27/224
-Patch3:		fix-usb-regression.patch
 # BFS
 Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
 # BFQ
@@ -272,7 +270,6 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
-%patch3 -p1
 
 %if %{with bfs}
 %patch100 -p1
@@ -340,22 +337,6 @@ BuildConfig() {
 	CONFIG_TRACING=y
 	CONFIG_CONTEXT_SWITCH_TRACER=y
 	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
-	%if 0
-	CONFIG_TOI=y
-	CONFIG_TOI_CORE=y
-	CONFIG_TOI_CRYPTO=y
-	CONFIG_TOI_USERUI=y
-	CONFIG_TOI_USERUI_DEFAULT_PATH="/sbin/tuxoniceui_text"
-	CONFIG_TOI_REPLACE_SWSUSP=y
-	CONFIG_TOI_DEFAULT_WAIT=25
-	CONFIG_TOI_DEFAULT_EXTRA_PAGES_ALLOWANCE=2000
-	CONFIG_TOI_FILE=y
-	CONFIG_TOI_SWAP=y
-	CONFIG_TOI_KEEP_IMAGE=n
-	CONFIG_TOI_IGNORE_LATE_INITCALL=n
-	CONFIG_TOI_CHECKSUM=n
-	CONFIG_CRYPTO_LZF=m
-	%endif
 %else
 	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=n
 	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
@@ -684,6 +665,9 @@ fi
 /lib/modules/%{kernel_release}/kernel/security
 /lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
 /lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
+%if %{with bfq}
+/lib/modules/%{kernel_release}/kernel/block
+%endif
 
 %dir %{_sysconfdir}/modprobe.d/%{kernel_release}
 
