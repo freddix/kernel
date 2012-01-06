@@ -17,8 +17,8 @@ Signed-off-by: Jesse Brandeburg <jesse.brandeburg@intel.com>
 
 diff --git a/drivers/net/e1000e/e1000.h b/drivers/net/e1000e/e1000.h
 index d6ee28f..d8447b6 100644
---- a/drivers/net/e1000e/e1000.h
-+++ b/drivers/net/e1000e/e1000.h
+--- a/drivers/net/ethernet/intel/e1000e/e1000.h
++++ b/drivers/net/ethernet/intel/e1000e/e1000.h
 @@ -90,6 +90,8 @@ struct e1000_info;
  #define E1000_RX_BUFFER_WRITE		16 /* Must be power of 2 */
  
@@ -30,8 +30,8 @@ index d6ee28f..d8447b6 100644
  #define E1000_MNG_VLAN_NONE		(-1)
 diff --git a/drivers/net/e1000e/netdev.c b/drivers/net/e1000e/netdev.c
 index c990341..be3676a 100644
---- a/drivers/net/e1000e/netdev.c
-+++ b/drivers/net/e1000e/netdev.c
+--- a/drivers/net/ethernet/intel/e1000e/netdev.c
++++ b/drivers/net/ethernet/intel/e1000e/netdev.c
 @@ -5379,7 +5379,8 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
  
  	/* Copper options */
@@ -44,8 +44,8 @@ index c990341..be3676a 100644
  	}
 diff --git a/drivers/net/e1000e/param.c b/drivers/net/e1000e/param.c
 index 2e39977..6600376 100644
---- a/drivers/net/e1000e/param.c
-+++ b/drivers/net/e1000e/param.c
+--- a/drivers/net/ethernet/intel/e1000e/param.c
++++ b/drivers/net/ethernet/intel/e1000e/param.c
 @@ -160,6 +160,15 @@ E1000_PARAM(WriteProtectNVM, "Write-protect NVM [WARNING: disabling this can lea
   */
  E1000_PARAM(CrcStripping, "Enable CRC Stripping, disable if your BMC needs " \

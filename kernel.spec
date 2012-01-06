@@ -12,16 +12,18 @@
 
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
-%bcond_without	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/2.6.39/README.BFQ
+
+%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+
 %bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.1
-%define		postver		.3
-%define		rel		2
+%define		basever		3.2
+%define		postver		.0
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -56,7 +58,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	edbdc798f23ae0f8045c82f6fa22c536
+# Source0-md5:	364066fa18767ec0ae5f4e4abcf9dc51
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	d5a9093f12187098eee659eeeb071421
@@ -68,9 +70,6 @@ Source6:	kernel-config.awk
 Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
-# TOI
-#Source100:	http://tuxonice.net/files/tuxonice-3.2-for-%{basever}.patch.bz2
-# Source100-md5:	e0e0bb351ff773cf3ad80a65b6671c51
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -78,11 +77,9 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# lkml: https://lkml.org/lkml/2011/11/27/224
-Patch3:		fix-usb-regression.patch
-# BFS
-Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
-# BFQ
+# http://ck.kolivas.org/patches/bfs
+Patch100:	3.2-sched-bfs-416.patch
+# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
 Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r1-for-3.1.patch
 Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r1-3.1.patch
 Patch112:	0003-block-introduce-the-BFQ-v3r1-I-O-sched-for-3.1.patch
@@ -114,7 +111,7 @@ Requires:	coreutils
 Requires:	geninitrd
 Requires:	module-init-tools >= 3.16
 Provides:	%{name}(vermagic) = %{kernel_release}
-Provides:	kernel(ureadahead) = {kernel_release}
+Provides:	kernel(ureadahead) = %{kernel_release}
 ExclusiveOS:	Linux
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -272,7 +269,6 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
-%patch3 -p1
 
 %if %{with bfs}
 %patch100 -p1
