@@ -23,7 +23,7 @@
 
 %define		basever		3.2
 %define		postver		.0
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -266,9 +266,9 @@ xz -dc %{SOURCE1} | patch -p1 -s
 bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
-%patch0 -p1
-#%patch1 -p1
-%patch2 -p1
+%patch0 -p1 -b .modpost
+%patch1 -p1 -b .overlayfs
+%patch2 -p1 -b .e1000e_mdix
 
 %if %{with bfs}
 %patch100 -p1
