@@ -15,7 +15,7 @@
 
 %bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 
-%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
