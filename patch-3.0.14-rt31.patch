@@ -9211,7 +9211,7 @@ index 9046f7b..f088cdc 100644
  	op_perf_setup();
 -	spin_unlock(&oprofilefs_lock);
 +	raw_spin_unlock(&oprofilefs_lock);
- 	return 0;
+ 	return count;
  }
  
 diff --git a/drivers/oprofile/oprofilefs.c b/drivers/oprofile/oprofilefs.c
@@ -9829,14 +9829,6 @@ index 8885b3e..3e5b58c 100644
  
  	return rc;
  }
-@@ -1561,6 +1561,7 @@ static inline int fcoe_filter_frames(struct fc_lport *lport,
- 	stats->InvalidCRCCount++;
- 	if (stats->InvalidCRCCount < 5)
- 		printk(KERN_WARNING "fcoe: dropping frame with CRC error\n");
-+	put_cpu();
- 	return -EINVAL;
- }
- 
 @@ -1605,7 +1606,7 @@ static void fcoe_recv_frame(struct sk_buff *skb)
  	 */
  	hp = (struct fcoe_hdr *) skb_network_header(skb);

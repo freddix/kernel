@@ -21,8 +21,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.0
-%define		postver		.14
-%define		rel		2
+%define		postver		.17
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -61,7 +61,7 @@ Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	ecf932280e2441bdd992423ef3d55f8f
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	2161fb86bef3d33c1ddede73797e2f2c
+# Source1-md5:	e86da20888dfcd19b94f5d518329ca25
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -84,7 +84,7 @@ Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3-for-3.0.patch
 Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3-3.0.patch
 Patch112:	0003-block-introduce-the-BFQ-v3-I-O-sched-for-3.0.patch
 # http://kernel.org/pub/linux/kernel/projects/rt/3.0
-Patch120:	patch-3.0.14-rt31.patch
+Patch120:	patch-3.0.14-rt32.patch
 #
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
@@ -269,9 +269,9 @@ xz -dc %{SOURCE1} | patch -p1 -s
 bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
-%patch0 -p1
-%patch1 -p1
-%patch2 -p1
+%patch0 -p1 -b .modpost
+%patch1 -p1 -b .overlayfs
+%patch2 -p1 -b .e1000e_mdix
 
 %if %{with bfs}
 %patch100 -p1
