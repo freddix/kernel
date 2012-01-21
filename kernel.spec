@@ -20,7 +20,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.1
-%define		postver		.7
+%define		postver		.10
 %define		rel		1
 
 %if %{with perf}
@@ -81,9 +81,9 @@ Patch2:		kernel-e1000e-control-mdix.patch
 # BFS
 Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
 # BFQ
-Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r1-for-3.1.patch
-Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r1-3.1.patch
-Patch112:	0003-block-introduce-the-BFQ-v3r1-I-O-sched-for-3.1.patch
+Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r2-for-3.1.patch
+Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r2-3.1.patch
+Patch112:	0003-block-introduce-the-BFQ-v3r2-I-O-sched-for-3.1.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod

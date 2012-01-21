@@ -1,7 +1,7 @@
-From 0287f0c5b8cc93150b60a27183475dd60d62e94e Mon Sep 17 00:00:00 2001
+From c5f17522ef95bf2576a7484d28b31af5eb44948d Mon Sep 17 00:00:00 2001
 From: Arianna Avanzini <avanzini.arianna@gmail.com>
 Date: Tue, 18 Oct 2011 21:23:04 +0200
-Subject: [PATCH 2/3] block: cgroups, kconfig, build bits for BFQ-v3r1-3.1
+Subject: [PATCH 2/3] block: cgroups, kconfig, build bits for BFQ-v3r2-3.1
 
 Add a Kconfig option and do the related Makefile changes to compile
 the BFQ I/O scheduler.  Also let the cgroups subsystem know about the
