@@ -1,3 +1,19 @@
+From 04769567939dfc6c02c76030ba77efc09dffed54 Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Wed, 21 Dec 2011 18:19:21 +0100
+Subject: [PATCH] vfs: pass struct path to __dentry_open()
+
+Make __dentry_open() take a struct path instead of separate vfsmount and dentry
+arguments.
+
+Change semantics as well, so that __dentry_open() acquires a reference to path
+instead of transferring it to the open file.
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/open.c |   48 ++++++++++++++++++++++--------------------------
+ 1 files changed, 22 insertions(+), 26 deletions(-)
+
 diff --git a/fs/open.c b/fs/open.c
 index 77becc0..ceab906 100644
 --- a/fs/open.c
@@ -128,9 +144,26 @@ index 77becc0..ceab906 100644
  EXPORT_SYMBOL(dentry_open);
  
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/Documentation/filesystems/Locking b/Documentation/filesystems/Locking
+From a2eec3093a0dae34a9c29c456e70c08abd94fb22 Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Wed, 21 Dec 2011 18:19:21 +0100
+Subject: [PATCH] vfs: add i_op->open()
+
+Add a new inode operation i_op->open().  This is for stacked
+filesystems that want to return a struct file from a different
+filesystem.
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ Documentation/filesystems/Locking |    2 ++
+ Documentation/filesystems/vfs.txt |    8 ++++++++
+ fs/open.c                         |   25 +++++++++++++++++++++++--
+ include/linux/fs.h                |    3 +++
+ 4 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/Documentation/filesystems/Locking b/Documentation/filesystems/Locking
 index 4fca82e..42b0539 100644
 --- a/Documentation/filesystems/Locking
 +++ b/Documentation/filesystems/Locking
@@ -248,9 +281,21 @@ index df499ad..c744032 100644
  				 const struct cred *);
  extern int filp_close(struct file *, fl_owner_t id);
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/fs/splice.c b/fs/splice.c
+From 7e4dc92727784cccba20d9ef61bbf7edf4ab07cc Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Wed, 21 Dec 2011 18:19:21 +0100
+Subject: [PATCH] vfs: export do_splice_direct() to modules
+
+Export do_splice_direct() to modules.  Needed by overlay filesystem.
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/splice.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/fs/splice.c b/fs/splice.c
 index 1ec0493..b9d4861 100644
 --- a/fs/splice.c
 +++ b/fs/splice.c
@@ -263,9 +308,23 @@ index 1ec0493..b9d4861 100644
  static int splice_pipe_to_pipe(struct pipe_inode_info *ipipe,
  			       struct pipe_inode_info *opipe,
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/fs/namespace.c b/fs/namespace.c
+From feea70867d451d37138a78cd815e2337603dbcc1 Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Wed, 21 Dec 2011 18:19:22 +0100
+Subject: [PATCH] vfs: introduce clone_private_mount()
+
+Overlayfs needs a private clone of the mount, so create a function for
+this and export to modules.
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/namespace.c        |   18 ++++++++++++++++++
+ include/linux/mount.h |    3 +++
+ 2 files changed, 21 insertions(+), 0 deletions(-)
+
+diff --git a/fs/namespace.c b/fs/namespace.c
 index 7e6f2c9..e93321e 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
@@ -275,8 +334,8 @@ index 7e6f2c9..e93321e 100644
  
 +struct vfsmount *clone_private_mount(struct path *path)
 +{
-+	struct mount *old_mnt = real_mount(path->mnt);
-+	struct mount *new_mnt;
++	struct vfsmount *old_mnt = path->mnt;
++	struct vfsmount *new_mnt;
 +
 +	if (IS_MNT_UNBINDABLE(old_mnt))
 +		return ERR_PTR(-EINVAL);
@@ -287,7 +346,7 @@ index 7e6f2c9..e93321e 100644
 +	if (!new_mnt)
 +		return ERR_PTR(-ENOMEM);
 +
-+	return &new_mnt->mnt;
++	return new_mnt;
 +}
 +EXPORT_SYMBOL_GPL(clone_private_mount);
 +
@@ -309,9 +368,105 @@ index d7029f4..344a262 100644
  extern struct vfsmount *vfs_kern_mount(struct file_system_type *type,
  				      int flags, const char *name,
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/fs/Kconfig b/fs/Kconfig
+From 1c185c48161c84520dc8e9cd936a966e3be375a9 Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Wed, 21 Dec 2011 18:19:22 +0100
+Subject: [PATCH] overlay filesystem
+
+Overlayfs allows one, usually read-write, directory tree to be
+overlaid onto another, read-only directory tree.  All modifications
+go to the upper, writable layer.
+
+This type of mechanism is most often used for live CDs but there's a
+wide variety of other uses.
+
+The implementation differs from other "union filesystem"
+implementations in that after a file is opened all operations go
+directly to the underlying, lower or upper, filesystems.  This
+simplifies the implementation and allows native performance in these
+cases.
+
+The dentry tree is duplicated from the underlying filesystems, this
+enables fast cached lookups without adding special support into the
+VFS.  This uses slightly more memory than union mounts, but dentries
+are relatively small.
+
+Currently inodes are duplicated as well, but it is a possible
+optimization to share inodes for non-directories.
+
+Opening non directories results in the open forwarded to the
+underlying filesystem.  This makes the behavior very similar to union
+mounts (with the same limitations vs. fchmod/fchown on O_RDONLY file
+descriptors).
+
+Usage:
+
+  mount -t overlay -olowerdir=/lower,upperdir=/upper overlay /mnt
+
+Supported:
+
+ - all operations
+
+Missing:
+
+ - Currently a crash in the middle of copy-up, rename, unlink, rmdir or create
+   over a whiteout may result in filesystem corruption on the overlay level.
+   IOW these operations need to become atomic or at least the corruption needs
+   to be detected.
+
+
+The following cotributions have been folded into this patch:
+
+Neil Brown <neilb@suse.de>:
+ - minimal remount support
+ - use correct seek function for directories
+ - initialise is_real before use
+ - rename ovl_fill_cache to ovl_dir_read
+
+Felix Fietkau <nbd@openwrt.org>:
+ - fix a deadlock in ovl_dir_read_merged
+ - fix a deadlock in ovl_remove_whiteouts
+
+Erez Zadok <ezk@fsl.cs.sunysb.edu>
+ - fix cleanup after WARN_ON
+
+Sedat Dilek <sedat.dilek@googlemail.com>
+ - fix up permission to confirm to new API
+
+Also thanks to the following people for testing and reporting bugs:
+
+  Jordi Pujol <jordipujolp@gmail.com>
+  Andy Whitcroft <apw@canonical.com>
+  Michal Suchanek <hramrach@centrum.cz>
+  Felix Fietkau <nbd@openwrt.org>
+  Erez Zadok <ezk@fsl.cs.sunysb.edu>
+  Randy Dunlap <rdunlap@xenotime.net>
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/Kconfig               |    1 +
+ fs/Makefile              |    1 +
+ fs/overlayfs/Kconfig     |    4 +
+ fs/overlayfs/Makefile    |    7 +
+ fs/overlayfs/copy_up.c   |  384 +++++++++++++++++++++++++++++
+ fs/overlayfs/dir.c       |  596 ++++++++++++++++++++++++++++++++++++++++++++
+ fs/overlayfs/inode.c     |  384 +++++++++++++++++++++++++++++
+ fs/overlayfs/overlayfs.h |   64 +++++
+ fs/overlayfs/readdir.c   |  565 ++++++++++++++++++++++++++++++++++++++++++
+ fs/overlayfs/super.c     |  611 ++++++++++++++++++++++++++++++++++++++++++++++
+ 10 files changed, 2617 insertions(+), 0 deletions(-)
+ create mode 100644 fs/overlayfs/Kconfig
+ create mode 100644 fs/overlayfs/Makefile
+ create mode 100644 fs/overlayfs/copy_up.c
+ create mode 100644 fs/overlayfs/dir.c
+ create mode 100644 fs/overlayfs/inode.c
+ create mode 100644 fs/overlayfs/overlayfs.h
+ create mode 100644 fs/overlayfs/readdir.c
+ create mode 100644 fs/overlayfs/super.c
+
+diff --git a/fs/Kconfig b/fs/Kconfig
 index 30145d8..061a218 100644
 --- a/fs/Kconfig
 +++ b/fs/Kconfig
@@ -2999,9 +3154,29 @@ index 0000000..18042cf
 +module_init(ovl_init);
 +module_exit(ovl_exit);
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
+From 43daf67dbebeb22a912ee2f67c9886a496f1b34b Mon Sep 17 00:00:00 2001
+From: Andy Whitcroft <apw@canonical.com>
+Date: Fri, 1 Oct 2010 18:48:02 +0100
+Subject: [PATCH] overlayfs: add statfs support
+
+Add support for statfs to the overlayfs filesystem.  As the upper layer
+is the target of all write operations assume that the space in that
+filesystem is the space in the overlayfs.  There will be some inaccuracy as
+overwriting a file will copy it up and consume space we were not expecting,
+but it is better than nothing.
+
+Use the upper layer dentry and mount from the overlayfs root inode,
+passing the statfs call to that filesystem.
+
+Signed-off-by: Andy Whitcroft <apw@canonical.com>
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/overlayfs/super.c |   20 ++++++++++++++++++++
+ 1 files changed, 20 insertions(+), 0 deletions(-)
+
+diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
 index 18042cf..8091f76 100644
 --- a/fs/overlayfs/super.c
 +++ b/fs/overlayfs/super.c
@@ -3036,9 +3211,24 @@ index 18042cf..8091f76 100644
  
  struct ovl_config {
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
+From 780b25fa95056a503b0b08fdfa787775ffff3d09 Mon Sep 17 00:00:00 2001
+From: Erez Zadok <ezk@fsl.cs.sunysb.edu>
+Date: Mon, 23 May 2011 20:59:20 -0400
+Subject: [PATCH] overlayfs: implement show_options
+
+This is useful because of the stacking nature of overlayfs.  Users like to
+find out (via /proc/mounts) which lower/upper directory were used at mount
+time.
+
+Signed-off-by: Erez Zadok <ezk@cs.sunysb.edu>
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/overlayfs/super.c |   63 ++++++++++++++++++++++++++++++++++----------------
+ 1 files changed, 43 insertions(+), 20 deletions(-)
+
+diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
 index 8091f76..a854f97 100644
 --- a/fs/overlayfs/super.c
 +++ b/fs/overlayfs/super.c
@@ -3177,9 +3367,23 @@ index 8091f76..a854f97 100644
  	return err;
  }
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/Documentation/filesystems/overlayfs.txt b/Documentation/filesystems/overlayfs.txt
+From bd166a38e40f8354a7887a62b85211181283d468 Mon Sep 17 00:00:00 2001
+From: Neil Brown <neilb@suse.de>
+Date: Wed, 21 Dec 2011 18:19:23 +0100
+Subject: [PATCH] overlay: overlay filesystem documentation
+
+Document the overlay filesystem.
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ Documentation/filesystems/overlayfs.txt |  199 +++++++++++++++++++++++++++++++
+ MAINTAINERS                             |    7 +
+ 2 files changed, 206 insertions(+), 0 deletions(-)
+ create mode 100644 Documentation/filesystems/overlayfs.txt
+
+diff --git a/Documentation/filesystems/overlayfs.txt b/Documentation/filesystems/overlayfs.txt
 new file mode 100644
 index 0000000..7161dc3
 --- /dev/null
@@ -3403,9 +3607,32 @@ index 6afba60..32c77da 100644
  M:	Christian Lamparter <chunkeey@googlemail.com>
  L:	linux-wireless@vger.kernel.org
 -- 
-1.7.7
+1.7.6.5
 
-  diff --git a/fs/ecryptfs/main.c b/fs/ecryptfs/main.c
+From ba7cb041172d05c44957e320708c2c169c71f37b Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Wed, 21 Dec 2011 18:19:23 +0100
+Subject: [PATCH] fs: limit filesystem stacking depth
+
+Add a simple read-only counter to super_block that indicates deep this
+is in the stack of filesystems.  Previously ecryptfs was the only
+stackable filesystem and it explicitly disallowed multiple layers of
+itself.
+
+Overlayfs, however, can be stacked recursively and also may be stacked
+on top of ecryptfs or vice versa.
+
+To limit the kernel stack usage we must limit the depth of the
+filesystem stack.  Initially the limit is set to 2.
+
+Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
+---
+ fs/ecryptfs/main.c   |    7 +++++++
+ fs/overlayfs/super.c |   10 ++++++++++
+ include/linux/fs.h   |   11 +++++++++++
+ 3 files changed, 28 insertions(+), 0 deletions(-)
+
+diff --git a/fs/ecryptfs/main.c b/fs/ecryptfs/main.c
 index b4a6bef..703cda3 100644
 --- a/fs/ecryptfs/main.c
 +++ b/fs/ecryptfs/main.c
@@ -3461,10 +3688,10 @@ index c744032..7b831f2 100644
  /** 
   * enum positive_aop_returns - aop return codes with specific semantics
   *
-@@ -1488,6 +1494,11 @@ struct super_block {
+@@ -1481,6 +1487,11 @@
+ 	int cleancache_poolid;
  
- 	/* Being remounted read-only */
- 	int s_readonly_remount;
+ 	struct shrinker s_shrink;	/* per-sb shrinker handle */
 +
 +	/*
 +	 * Indicates how deep in a filesystem stack this SB is
@@ -3474,6 +3701,53 @@ index c744032..7b831f2 100644
  
  /* superblock cache pruning functions */
 -- 
-1.7.7
+1.7.6.5
 
-  
+From c16e5b47f3442ab412c02092ed4cb7db1bc1a962 Mon Sep 17 00:00:00 2001
+From: Andy Whitcroft <apw@canonical.com>
+Date: Tue, 17 Jan 2012 11:48:23 +0000
+Subject: [PATCH] overlayfs: apply device cgroup and security permissions to
+ overlay files
+
+When checking permissions on an overlayfs inode we do not take into
+account either device cgroup restrictions nor security permissions.
+This allows a user to mount an overlayfs layer over a restricted device
+directory and by pass those permissions to open otherwise restricted
+files.
+
+Use devcgroup_inode_permission() and security_inode_permission() against
+the underlying inodes when calculating ovl_permission().
+
+Signed-off-by: Andy Whitcroft <apw@canonical.com>
+---
+ fs/overlayfs/inode.c |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/fs/overlayfs/inode.c b/fs/overlayfs/inode.c
+index ba1a777..1145a76 100644
+--- a/fs/overlayfs/inode.c
++++ b/fs/overlayfs/inode.c
+@@ -10,6 +10,8 @@
+ #include <linux/fs.h>
+ #include <linux/slab.h>
+ #include <linux/xattr.h>
++#include <linux/device_cgroup.h>
++#include <linux/security.h>
+ #include "overlayfs.h"
+ 
+ int ovl_setattr(struct dentry *dentry, struct iattr *attr)
+@@ -118,6 +120,11 @@ int ovl_permission(struct inode *inode, int mask)
+ 		err = realinode->i_op->permission(realinode, mask);
+ 	else
+ 		err = generic_permission(realinode, mask);
++
++	if (!err)
++		err = devcgroup_inode_permission(realinode, mask);
++	if (!err)
++		err = security_inode_permission(realinode, mask);
+ out_dput:
+ 	dput(alias);
+ 	return err;
+-- 
+1.7.5.4
+
