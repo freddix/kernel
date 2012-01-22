@@ -13,8 +13,8 @@
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
 
-%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
-%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
@@ -76,6 +76,8 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
+# multiple bugs involved
+Patch3:		kernel-i915-gpu-finish.patch
 # http://ck.kolivas.org/patches/bfs
 Patch100:	3.2-sched-bfs-416.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
@@ -265,9 +267,10 @@ xz -dc %{SOURCE1} | patch -p1 -s
 bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %endif
 
-%patch0 -p1 -b .modpost
-%patch1 -p1 -b .overlayfs
-%patch2 -p1 -b .e1000e_mdix
+%patch0 -p1
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
 
 %if %{with bfs}
 %patch100 -p1
@@ -395,7 +398,6 @@ BuildConfig() {
 %endif
 %if %{with bfq}
 	CONFIG_IOSCHED_BFQ=y
-	CONFIG_IOSCHED_CFQ=m
 	CONFIG_CGROUP_BFQIO=y
 	CONFIG_DEFAULT_CFQ=n
 	CONFIG_DEFAULT_BFQ=y
