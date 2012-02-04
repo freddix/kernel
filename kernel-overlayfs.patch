@@ -1,36 +1,296 @@
-From 04769567939dfc6c02c76030ba77efc09dffed54 Mon Sep 17 00:00:00 2001
-From: Miklos Szeredi <mszeredi@suse.cz>
-Date: Wed, 21 Dec 2011 18:19:21 +0100
-Subject: [PATCH] vfs: pass struct path to __dentry_open()
-
-Make __dentry_open() take a struct path instead of separate vfsmount and dentry
-arguments.
-
-Change semantics as well, so that __dentry_open() acquires a reference to path
-instead of transferring it to the open file.
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/open.c |   48 ++++++++++++++++++++++--------------------------
- 1 files changed, 22 insertions(+), 26 deletions(-)
-
-diff --git a/fs/open.c b/fs/open.c
-index 77becc0..ceab906 100644
+--- /dev/null
++++ b/Documentation/filesystems/overlayfs.txt
+@@ -0,0 +1,199 @@
++Written by: Neil Brown <neilb@suse.de>
++
++Overlay Filesystem
++==================
++
++This document describes a prototype for a new approach to providing
++overlay-filesystem functionality in Linux (sometimes referred to as
++union-filesystems).  An overlay-filesystem tries to present a
++filesystem which is the result over overlaying one filesystem on top
++of the other.
++
++The result will inevitably fail to look exactly like a normal
++filesystem for various technical reasons.  The expectation is that
++many use cases will be able to ignore these differences.
++
++This approach is 'hybrid' because the objects that appear in the
++filesystem do not all appear to belong to that filesystem.  In many
++cases an object accessed in the union will be indistinguishable
++from accessing the corresponding object from the original filesystem.
++This is most obvious from the 'st_dev' field returned by stat(2).
++
++While directories will report an st_dev from the overlay-filesystem,
++all non-directory objects will report an st_dev from the lower or
++upper filesystem that is providing the object.  Similarly st_ino will
++only be unique when combined with st_dev, and both of these can change
++over the lifetime of a non-directory object.  Many applications and
++tools ignore these values and will not be affected.
++
++Upper and Lower
++---------------
++
++An overlay filesystem combines two filesystems - an 'upper' filesystem
++and a 'lower' filesystem.  When a name exists in both filesystems, the
++object in the 'upper' filesystem is visible while the object in the
++'lower' filesystem is either hidden or, in the case of directories,
++merged with the 'upper' object.
++
++It would be more correct to refer to an upper and lower 'directory
++tree' rather than 'filesystem' as it is quite possible for both
++directory trees to be in the same filesystem and there is no
++requirement that the root of a filesystem be given for either upper or
++lower.
++
++The lower filesystem can be any filesystem supported by Linux and does
++not need to be writable.  The lower filesystem can even be another
++overlayfs.  The upper filesystem will normally be writable and if it
++is it must support the creation of trusted.* extended attributes, and
++must provide valid d_type in readdir responses, at least for symbolic
++links - so NFS is not suitable.
++
++A read-only overlay of two read-only filesystems may use any
++filesystem type.
++
++Directories
++-----------
++
++Overlaying mainly involved directories.  If a given name appears in both
++upper and lower filesystems and refers to a non-directory in either,
++then the lower object is hidden - the name refers only to the upper
++object.
++
++Where both upper and lower objects are directories, a merged directory
++is formed.
++
++At mount time, the two directories given as mount options are combined
++into a merged directory:
++
++  mount -t overlayfs overlayfs -olowerdir=/lower,upperdir=/upper /overlay
++
++Then whenever a lookup is requested in such a merged directory, the
++lookup is performed in each actual directory and the combined result
++is cached in the dentry belonging to the overlay filesystem.  If both
++actual lookups find directories, both are stored and a merged
++directory is created, otherwise only one is stored: the upper if it
++exists, else the lower.
++
++Only the lists of names from directories are merged.  Other content
++such as metadata and extended attributes are reported for the upper
++directory only.  These attributes of the lower directory are hidden.
++
++whiteouts and opaque directories
++--------------------------------
++
++In order to support rm and rmdir without changing the lower
++filesystem, an overlay filesystem needs to record in the upper filesystem
++that files have been removed.  This is done using whiteouts and opaque
++directories (non-directories are always opaque).
++
++The overlay filesystem uses extended attributes with a
++"trusted.overlay."  prefix to record these details.
++
++A whiteout is created as a symbolic link with target
++"(overlay-whiteout)" and with xattr "trusted.overlay.whiteout" set to "y".
++When a whiteout is found in the upper level of a merged directory, any
++matching name in the lower level is ignored, and the whiteout itself
++is also hidden.
++
++A directory is made opaque by setting the xattr "trusted.overlay.opaque"
++to "y".  Where the upper filesystem contains an opaque directory, any
++directory in the lower filesystem with the same name is ignored.
++
++readdir
++-------
++
++When a 'readdir' request is made on a merged directory, the upper and
++lower directories are each read and the name lists merged in the
++obvious way (upper is read first, then lower - entries that already
++exist are not re-added).  This merged name list is cached in the
++'struct file' and so remains as long as the file is kept open.  If the
++directory is opened and read by two processes at the same time, they
++will each have separate caches.  A seekdir to the start of the
++directory (offset 0) followed by a readdir will cause the cache to be
++discarded and rebuilt.
++
++This means that changes to the merged directory do not appear while a
++directory is being read.  This is unlikely to be noticed by many
++programs.
++
++seek offsets are assigned sequentially when the directories are read.
++Thus if
++  - read part of a directory
++  - remember an offset, and close the directory
++  - re-open the directory some time later
++  - seek to the remembered offset
++
++there may be little correlation between the old and new locations in
++the list of filenames, particularly if anything has changed in the
++directory.
++
++Readdir on directories that are not merged is simply handled by the
++underlying directory (upper or lower).
++
++
++Non-directories
++---------------
++
++Objects that are not directories (files, symlinks, device-special
++files etc.) are presented either from the upper or lower filesystem as
++appropriate.  When a file in the lower filesystem is accessed in a way
++the requires write-access, such as opening for write access, changing
++some metadata etc., the file is first copied from the lower filesystem
++to the upper filesystem (copy_up).  Note that creating a hard-link
++also requires copy_up, though of course creation of a symlink does
++not.
++
++The copy_up may turn out to be unnecessary, for example if the file is
++opened for read-write but the data is not modified.
++
++The copy_up process first makes sure that the containing directory
++exists in the upper filesystem - creating it and any parents as
++necessary.  It then creates the object with the same metadata (owner,
++mode, mtime, symlink-target etc.) and then if the object is a file, the
++data is copied from the lower to the upper filesystem.  Finally any
++extended attributes are copied up.
++
++Once the copy_up is complete, the overlay filesystem simply
++provides direct access to the newly created file in the upper
++filesystem - future operations on the file are barely noticed by the
++overlay filesystem (though an operation on the name of the file such as
++rename or unlink will of course be noticed and handled).
++
++
++Non-standard behavior
++---------------------
++
++The copy_up operation essentially creates a new, identical file and
++moves it over to the old name.  The new file may be on a different
++filesystem, so both st_dev and st_ino of the file may change.
++
++Any open files referring to this inode will access the old data and
++metadata.  Similarly any file locks obtained before copy_up will not
++apply to the copied up file.
++
++On a file is opened with O_RDONLY fchmod(2), fchown(2), futimesat(2)
++and fsetxattr(2) will fail with EROFS.
++
++If a file with multiple hard links is copied up, then this will
++"break" the link.  Changes will not be propagated to other names
++referring to the same inode.
++
++Symlinks in /proc/PID/ and /proc/PID/fd which point to a non-directory
++object in overlayfs will not contain vaid absolute paths, only
++relative paths leading up to the filesystem's root.  This will be
++fixed in the future.
++
++Some operations are not atomic, for example a crash during copy_up or
++rename will leave the filesystem in an inconsitent state.  This will
++be addressed in the future.
++
++Changes to underlying filesystems
++---------------------------------
++
++Offline changes, when the overlay is not mounted, are allowed to either
++the upper or the lower trees.
++
++Changes to the underlying filesystems while part of a mounted overlay
++filesystem are not allowed.  If the underlying filesystem is changed,
++the behavior of the overlay is undefined, though it will not result in
++a crash or deadlock.
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -4901,6 +4901,13 @@ F:	drivers/scsi/osd/
+ F:	include/scsi/osd_*
+ F:	fs/exofs/
+ 
++OVERLAYFS FILESYSTEM
++M:	Miklos Szeredi <miklos@szeredi.hu>
++L:	linux-fsdevel@vger.kernel.org
++S:	Supported
++F:	fs/overlayfs/*
++F:	Documentation/filesystems/overlayfs.txt
++
+ P54 WIRELESS DRIVER
+ M:	Christian Lamparter <chunkeey@googlemail.com>
+ L:	linux-wireless@vger.kernel.org
+--- a/fs/Kconfig
++++ b/fs/Kconfig
+@@ -63,6 +63,7 @@ source "fs/quota/Kconfig"
+ 
+ source "fs/autofs4/Kconfig"
+ source "fs/fuse/Kconfig"
++source "fs/overlayfs/Kconfig"
+ 
+ config CUSE
+ 	tristate "Character device in Userspace support"
+--- a/fs/Makefile
++++ b/fs/Makefile
+@@ -104,6 +104,7 @@ obj-$(CONFIG_QNX4FS_FS)		+= qnx4/
+ obj-$(CONFIG_AUTOFS4_FS)	+= autofs4/
+ obj-$(CONFIG_ADFS_FS)		+= adfs/
+ obj-$(CONFIG_FUSE_FS)		+= fuse/
++obj-$(CONFIG_OVERLAYFS_FS)	+= overlayfs/
+ obj-$(CONFIG_UDF_FS)		+= udf/
+ obj-$(CONFIG_SUN_OPENPROMFS)	+= openpromfs/
+ obj-$(CONFIG_OMFS_FS)		+= omfs/
+--- a/fs/ecryptfs/main.c
++++ b/fs/ecryptfs/main.c
+@@ -544,6 +544,13 @@ static struct dentry *ecryptfs_mount(str
+ 	s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
+ 	s->s_blocksize = path.dentry->d_sb->s_blocksize;
+ 	s->s_magic = ECRYPTFS_SUPER_MAGIC;
++	s->s_stack_depth = path.dentry->d_sb->s_stack_depth + 1;
++
++	rc = -EINVAL;
++	if (s->s_stack_depth > FILESYSTEM_MAX_STACK_DEPTH) {
++		printk(KERN_ERR "eCryptfs: maximum fs stacking depth exceeded\n");
++		goto out_free;
++	}
+ 
+ 	inode = ecryptfs_get_inode(path.dentry->d_inode, s);
+ 	rc = PTR_ERR(inode);
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -1492,6 +1492,23 @@ void drop_collected_mounts(struct vfsmou
+ 	release_mounts(&umount_list);
+ }
+ 
++struct vfsmount *clone_private_mount(struct path *path)
++{
++	struct vfsmount *mnt;
++
++	if (IS_MNT_UNBINDABLE(path->mnt))
++		return ERR_PTR(-EINVAL);
++
++	down_read(&namespace_sem);
++	mnt = clone_mnt(path->mnt, path->dentry, CL_PRIVATE);
++	up_read(&namespace_sem);
++	if (!mnt)
++		return ERR_PTR(-ENOMEM);
++
++	return mnt;
++}
++EXPORT_SYMBOL_GPL(clone_private_mount);
++
+ int iterate_mounts(int (*f)(struct vfsmount *, void *), void *arg,
+ 		   struct vfsmount *root)
+ {
 --- a/fs/open.c
 +++ b/fs/open.c
-@@ -644,24 +644,24 @@ static inline int __get_file_write_access(struct inode *inode,
+@@ -644,8 +644,7 @@ static inline int __get_file_write_acces
  	return error;
  }
  
 -static struct file *__dentry_open(struct dentry *dentry, struct vfsmount *mnt,
 -					struct file *f,
--					int (*open)(struct inode *, struct file *),
--					const struct cred *cred)
 +static struct file *__dentry_open(struct path *path, struct file *f,
-+				  int (*open)(struct inode *, struct file *),
-+				  const struct cred *cred)
+ 					int (*open)(struct inode *, struct file *),
+ 					const struct cred *cred)
  {
- 	static const struct file_operations empty_fops = {};
+@@ -653,15 +652,16 @@ static struct file *__dentry_open(struct
  	struct inode *inode;
  	int error;
  
@@ -49,7 +309,7 @@ index 77becc0..ceab906 100644
  		if (error)
  			goto cleanup_file;
  		if (!special_file(inode->i_mode))
-@@ -669,8 +669,7 @@ static struct file *__dentry_open(struct dentry *dentry, struct vfsmount *mnt,
+@@ -669,8 +669,7 @@ static struct file *__dentry_open(struct
  	}
  
  	f->f_mapping = inode->i_mapping;
@@ -95,404 +355,85 @@ index 77becc0..ceab906 100644
  					     open, cred);
  out:
  	return nd->intent.open.file;
-@@ -797,11 +795,9 @@ struct file *nameidata_to_filp(struct nameidata *nd)
- 	nd->intent.open.file = NULL;
+@@ -798,10 +796,17 @@ struct file *nameidata_to_filp(struct na
  
  	/* Has the filesystem initialised the file for us? */
--	if (filp->f_path.dentry == NULL) {
+ 	if (filp->f_path.dentry == NULL) {
 -		path_get(&nd->path);
 -		filp = __dentry_open(nd->path.dentry, nd->path.mnt, filp,
 -				     NULL, cred);
--	}
-+	if (filp->f_path.dentry == NULL)
-+		filp = __dentry_open(&nd->path, filp, NULL, cred);
++		struct inode *inode = nd->path.dentry->d_inode;
++
++		if (inode->i_op->open) {
++			int flags = filp->f_flags;
++			put_filp(filp);
++			filp = inode->i_op->open(nd->path.dentry, flags, cred);
++		} else {
++			filp = __dentry_open(&nd->path, filp, NULL, cred);
++		}
+ 	}
 +
  	return filp;
  }
  
-@@ -812,24 +808,24 @@ struct file *nameidata_to_filp(struct nameidata *nd)
+@@ -812,26 +817,45 @@ struct file *nameidata_to_filp(struct na
  struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags,
  			 const struct cred *cred)
  {
 -	int error;
- 	struct file *f;
-+	struct file *ret;
+-	struct file *f;
+-
+-	validate_creds(cred);
 +	struct path path = { .dentry = dentry, .mnt = mnt };
- 
- 	validate_creds(cred);
++	struct file *ret;
  
  	/* We must always pass in a valid mount pointer. */
  	BUG_ON(!mnt);
  
 -	error = -ENFILE;
-+	ret = ERR_PTR(-ENFILE);
- 	f = get_empty_filp();
--	if (f == NULL) {
--		dput(dentry);
--		mntput(mnt);
--		return ERR_PTR(error);
-+	if (f != NULL) {
-+		f->f_flags = flags;
-+		ret = __dentry_open(&path, f, NULL, cred);
- 	}
++	ret = vfs_open(&path, flags, cred);
 +	path_put(&path);
- 
--	f->f_flags = flags;
--	return __dentry_open(dentry, mnt, f, NULL, cred);
-+	return ret;
- }
- EXPORT_SYMBOL(dentry_open);
- 
--- 
-1.7.6.5
-
-From a2eec3093a0dae34a9c29c456e70c08abd94fb22 Mon Sep 17 00:00:00 2001
-From: Miklos Szeredi <mszeredi@suse.cz>
-Date: Wed, 21 Dec 2011 18:19:21 +0100
-Subject: [PATCH] vfs: add i_op->open()
-
-Add a new inode operation i_op->open().  This is for stacked
-filesystems that want to return a struct file from a different
-filesystem.
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- Documentation/filesystems/Locking |    2 ++
- Documentation/filesystems/vfs.txt |    8 ++++++++
- fs/open.c                         |   25 +++++++++++++++++++++++--
- include/linux/fs.h                |    3 +++
- 4 files changed, 36 insertions(+), 2 deletions(-)
-
-diff --git a/Documentation/filesystems/Locking b/Documentation/filesystems/Locking
-index 4fca82e..42b0539 100644
---- a/Documentation/filesystems/Locking
-+++ b/Documentation/filesystems/Locking
-@@ -62,6 +62,7 @@ ata *);
- 	int (*removexattr) (struct dentry *, const char *);
- 	void (*truncate_range)(struct inode *, loff_t, loff_t);
- 	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start, u64 len);
-+	struct file *(*open)(struct dentry *,struct file *,const struct cred *);
- 
- locking rules:
- 	all may block
-@@ -89,6 +90,7 @@ listxattr:	no
- removexattr:	yes
- truncate_range:	yes
- fiemap:		no
-+open:		no
- 	Additionally, ->rmdir(), ->unlink() and ->rename() have ->i_mutex on
- victim.
- 	cross-directory ->rename() has (per-superblock) ->s_vfs_rename_sem.
-diff --git a/Documentation/filesystems/vfs.txt b/Documentation/filesystems/vfs.txt
-index 3d9393b..3c65a0f 100644
---- a/Documentation/filesystems/vfs.txt
-+++ b/Documentation/filesystems/vfs.txt
-@@ -364,6 +364,8 @@ struct inode_operations {
- 	ssize_t (*listxattr) (struct dentry *, char *, size_t);
- 	int (*removexattr) (struct dentry *, const char *);
- 	void (*truncate_range)(struct inode *, loff_t, loff_t);
-+	struct file *(*open) (struct dentry *, struct file *,
-+			      const struct cred *);
- };
- 
- Again, all methods are called without any locks being held, unless
-@@ -475,6 +477,12 @@ otherwise noted.
-   truncate_range: a method provided by the underlying filesystem to truncate a
-   	range of blocks , i.e. punch a hole somewhere in a file.
- 
-+  open: this is an alternative to f_op->open(), the difference is that this
-+	method may return any open file, not necessarily originating from the
-+	same filesystem as the one i_op->open() was called on.  It may be useful
-+	for stacking filesystems which want to allow native I/O directly on
-+	underlying files.
 +
- 
- The Address Space Object
- ========================
-diff --git a/fs/open.c b/fs/open.c
-index ceab906..7f56fc1 100644
---- a/fs/open.c
-+++ b/fs/open.c
-@@ -796,7 +796,7 @@ struct file *nameidata_to_filp(struct nameidata *nd)
- 
- 	/* Has the filesystem initialised the file for us? */
- 	if (filp->f_path.dentry == NULL)
--		filp = __dentry_open(&nd->path, filp, NULL, cred);
-+		filp = vfs_open(&nd->path, filp, cred);
- 
- 	return filp;
- }
-@@ -821,7 +821,7 @@ struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags,
- 	f = get_empty_filp();
- 	if (f != NULL) {
- 		f->f_flags = flags;
--		ret = __dentry_open(&path, f, NULL, cred);
-+		ret = vfs_open(&path, f, cred);
- 	}
- 	path_put(&path);
- 
-@@ -829,6 +829,27 @@ struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags,
- }
- EXPORT_SYMBOL(dentry_open);
- 
++	return ret;
++}
++EXPORT_SYMBOL(dentry_open);
++
 +/**
 + * vfs_open - open the file at the given path
 + * @path: path to open
-+ * @filp: newly allocated file with f_flag initialized
++ * @flags: open flags
 + * @cred: credentials to use
 + *
 + * Open the file.  If successful, the returned file will have acquired
 + * an additional reference for path.
 + */
-+struct file *vfs_open(struct path *path, struct file *filp,
-+		      const struct cred *cred)
++struct file *vfs_open(struct path *path, int flags, const struct cred *cred)
 +{
++	struct file *f;
 +	struct inode *inode = path->dentry->d_inode;
 +
-+	if (inode->i_op->open)
-+		return inode->i_op->open(path->dentry, filp, cred);
-+	else
-+		return __dentry_open(path, filp, NULL, cred);
-+}
-+EXPORT_SYMBOL(vfs_open);
++	validate_creds(cred);
 +
++	if (inode->i_op->open)
++		return inode->i_op->open(path->dentry, flags, cred);
+ 	f = get_empty_filp();
+-	if (f == NULL) {
+-		dput(dentry);
+-		mntput(mnt);
+-		return ERR_PTR(error);
+-	}
++	if (f == NULL)
++		return ERR_PTR(-ENFILE);
+ 
+ 	f->f_flags = flags;
+-	return __dentry_open(dentry, mnt, f, NULL, cred);
++	return __dentry_open(path, f, NULL, cred);
+ }
+-EXPORT_SYMBOL(dentry_open);
++EXPORT_SYMBOL(vfs_open);
+ 
  static void __put_unused_fd(struct files_struct *files, unsigned int fd)
  {
- 	struct fdtable *fdt = files_fdtable(files);
-diff --git a/include/linux/fs.h b/include/linux/fs.h
-index df499ad..c744032 100644
---- a/include/linux/fs.h
-+++ b/include/linux/fs.h
-@@ -1645,6 +1645,8 @@ struct inode_operations {
- 	void (*truncate_range)(struct inode *, loff_t, loff_t);
- 	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start,
- 		      u64 len);
-+	struct file *(*open) (struct dentry *, struct file *,
-+			      const struct cred *);
- } ____cacheline_aligned;
- 
- struct seq_file;
-@@ -2015,6 +2017,7 @@ extern long do_sys_open(int dfd, const char __user *filename, int flags,
- extern struct file *filp_open(const char *, int, umode_t);
- extern struct file *file_open_root(struct dentry *, struct vfsmount *,
- 				   const char *, int);
-+extern struct file *vfs_open(struct path *, struct file *, const struct cred *);
- extern struct file * dentry_open(struct dentry *, struct vfsmount *, int,
- 				 const struct cred *);
- extern int filp_close(struct file *, fl_owner_t id);
--- 
-1.7.6.5
-
-From 7e4dc92727784cccba20d9ef61bbf7edf4ab07cc Mon Sep 17 00:00:00 2001
-From: Miklos Szeredi <mszeredi@suse.cz>
-Date: Wed, 21 Dec 2011 18:19:21 +0100
-Subject: [PATCH] vfs: export do_splice_direct() to modules
-
-Export do_splice_direct() to modules.  Needed by overlay filesystem.
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/splice.c |    1 +
- 1 files changed, 1 insertions(+), 0 deletions(-)
-
-diff --git a/fs/splice.c b/fs/splice.c
-index 1ec0493..b9d4861 100644
---- a/fs/splice.c
-+++ b/fs/splice.c
-@@ -1299,6 +1299,7 @@ long do_splice_direct(struct file *in, loff_t *ppos, struct file *out,
- 
- 	return ret;
- }
-+EXPORT_SYMBOL(do_splice_direct);
- 
- static int splice_pipe_to_pipe(struct pipe_inode_info *ipipe,
- 			       struct pipe_inode_info *opipe,
--- 
-1.7.6.5
-
-From feea70867d451d37138a78cd815e2337603dbcc1 Mon Sep 17 00:00:00 2001
-From: Miklos Szeredi <mszeredi@suse.cz>
-Date: Wed, 21 Dec 2011 18:19:22 +0100
-Subject: [PATCH] vfs: introduce clone_private_mount()
-
-Overlayfs needs a private clone of the mount, so create a function for
-this and export to modules.
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/namespace.c        |   18 ++++++++++++++++++
- include/linux/mount.h |    3 +++
- 2 files changed, 21 insertions(+), 0 deletions(-)
-
-diff --git a/fs/namespace.c b/fs/namespace.c
-index 7e6f2c9..e93321e 100644
---- a/fs/namespace.c
-+++ b/fs/namespace.c
-@@ -1327,6 +1327,24 @@ void drop_collected_mounts(struct vfsmount *mnt)
- 	release_mounts(&umount_list);
- }
- 
-+struct vfsmount *clone_private_mount(struct path *path)
-+{
-+	struct vfsmount *old_mnt = path->mnt;
-+	struct vfsmount *new_mnt;
-+
-+	if (IS_MNT_UNBINDABLE(old_mnt))
-+		return ERR_PTR(-EINVAL);
-+
-+	down_read(&namespace_sem);
-+	new_mnt = clone_mnt(old_mnt, path->dentry, CL_PRIVATE);
-+	up_read(&namespace_sem);
-+	if (!new_mnt)
-+		return ERR_PTR(-ENOMEM);
-+
-+	return new_mnt;
-+}
-+EXPORT_SYMBOL_GPL(clone_private_mount);
-+
- int iterate_mounts(int (*f)(struct vfsmount *, void *), void *arg,
- 		   struct vfsmount *root)
- {
-diff --git a/include/linux/mount.h b/include/linux/mount.h
-index d7029f4..344a262 100644
---- a/include/linux/mount.h
-+++ b/include/linux/mount.h
-@@ -66,6 +66,9 @@ extern void mnt_pin(struct vfsmount *mnt);
- extern void mnt_unpin(struct vfsmount *mnt);
- extern int __mnt_is_readonly(struct vfsmount *mnt);
- 
-+struct path;
-+extern struct vfsmount *clone_private_mount(struct path *path);
-+
- struct file_system_type;
- extern struct vfsmount *vfs_kern_mount(struct file_system_type *type,
- 				      int flags, const char *name,
--- 
-1.7.6.5
-
-From 1c185c48161c84520dc8e9cd936a966e3be375a9 Mon Sep 17 00:00:00 2001
-From: Miklos Szeredi <mszeredi@suse.cz>
-Date: Wed, 21 Dec 2011 18:19:22 +0100
-Subject: [PATCH] overlay filesystem
-
-Overlayfs allows one, usually read-write, directory tree to be
-overlaid onto another, read-only directory tree.  All modifications
-go to the upper, writable layer.
-
-This type of mechanism is most often used for live CDs but there's a
-wide variety of other uses.
-
-The implementation differs from other "union filesystem"
-implementations in that after a file is opened all operations go
-directly to the underlying, lower or upper, filesystems.  This
-simplifies the implementation and allows native performance in these
-cases.
-
-The dentry tree is duplicated from the underlying filesystems, this
-enables fast cached lookups without adding special support into the
-VFS.  This uses slightly more memory than union mounts, but dentries
-are relatively small.
-
-Currently inodes are duplicated as well, but it is a possible
-optimization to share inodes for non-directories.
-
-Opening non directories results in the open forwarded to the
-underlying filesystem.  This makes the behavior very similar to union
-mounts (with the same limitations vs. fchmod/fchown on O_RDONLY file
-descriptors).
-
-Usage:
-
-  mount -t overlay -olowerdir=/lower,upperdir=/upper overlay /mnt
-
-Supported:
-
- - all operations
-
-Missing:
-
- - Currently a crash in the middle of copy-up, rename, unlink, rmdir or create
-   over a whiteout may result in filesystem corruption on the overlay level.
-   IOW these operations need to become atomic or at least the corruption needs
-   to be detected.
-
-
-The following cotributions have been folded into this patch:
-
-Neil Brown <neilb@suse.de>:
- - minimal remount support
- - use correct seek function for directories
- - initialise is_real before use
- - rename ovl_fill_cache to ovl_dir_read
-
-Felix Fietkau <nbd@openwrt.org>:
- - fix a deadlock in ovl_dir_read_merged
- - fix a deadlock in ovl_remove_whiteouts
-
-Erez Zadok <ezk@fsl.cs.sunysb.edu>
- - fix cleanup after WARN_ON
-
-Sedat Dilek <sedat.dilek@googlemail.com>
- - fix up permission to confirm to new API
-
-Also thanks to the following people for testing and reporting bugs:
-
-  Jordi Pujol <jordipujolp@gmail.com>
-  Andy Whitcroft <apw@canonical.com>
-  Michal Suchanek <hramrach@centrum.cz>
-  Felix Fietkau <nbd@openwrt.org>
-  Erez Zadok <ezk@fsl.cs.sunysb.edu>
-  Randy Dunlap <rdunlap@xenotime.net>
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/Kconfig               |    1 +
- fs/Makefile              |    1 +
- fs/overlayfs/Kconfig     |    4 +
- fs/overlayfs/Makefile    |    7 +
- fs/overlayfs/copy_up.c   |  384 +++++++++++++++++++++++++++++
- fs/overlayfs/dir.c       |  596 ++++++++++++++++++++++++++++++++++++++++++++
- fs/overlayfs/inode.c     |  384 +++++++++++++++++++++++++++++
- fs/overlayfs/overlayfs.h |   64 +++++
- fs/overlayfs/readdir.c   |  565 ++++++++++++++++++++++++++++++++++++++++++
- fs/overlayfs/super.c     |  611 ++++++++++++++++++++++++++++++++++++++++++++++
- 10 files changed, 2617 insertions(+), 0 deletions(-)
- create mode 100644 fs/overlayfs/Kconfig
- create mode 100644 fs/overlayfs/Makefile
- create mode 100644 fs/overlayfs/copy_up.c
- create mode 100644 fs/overlayfs/dir.c
- create mode 100644 fs/overlayfs/inode.c
- create mode 100644 fs/overlayfs/overlayfs.h
- create mode 100644 fs/overlayfs/readdir.c
- create mode 100644 fs/overlayfs/super.c
-
-diff --git a/fs/Kconfig b/fs/Kconfig
-index 30145d8..061a218 100644
---- a/fs/Kconfig
-+++ b/fs/Kconfig
-@@ -63,6 +63,7 @@ source "fs/quota/Kconfig"
- 
- source "fs/autofs4/Kconfig"
- source "fs/fuse/Kconfig"
-+source "fs/overlayfs/Kconfig"
- 
- config CUSE
- 	tristate "Character device in Userspace support"
-diff --git a/fs/Makefile b/fs/Makefile
-index 93804d4..b7866b2 100644
---- a/fs/Makefile
-+++ b/fs/Makefile
-@@ -105,6 +105,7 @@ obj-$(CONFIG_QNX4FS_FS)		+= qnx4/
- obj-$(CONFIG_AUTOFS4_FS)	+= autofs4/
- obj-$(CONFIG_ADFS_FS)		+= adfs/
- obj-$(CONFIG_FUSE_FS)		+= fuse/
-+obj-$(CONFIG_OVERLAYFS_FS)	+= overlayfs/
- obj-$(CONFIG_UDF_FS)		+= udf/
- obj-$(CONFIG_SUN_OPENPROMFS)	+= openpromfs/
- obj-$(CONFIG_OMFS_FS)		+= omfs/
-diff --git a/fs/overlayfs/Kconfig b/fs/overlayfs/Kconfig
-new file mode 100644
-index 0000000..c4517da
 --- /dev/null
 +++ b/fs/overlayfs/Kconfig
 @@ -0,0 +1,4 @@
@@ -500,9 +441,6 @@ index 0000000..c4517da
 +	tristate "Overlay filesystem support"
 +	help
 +	  Add support for overlay filesystem.
-diff --git a/fs/overlayfs/Makefile b/fs/overlayfs/Makefile
-new file mode 100644
-index 0000000..8f91889
 --- /dev/null
 +++ b/fs/overlayfs/Makefile
 @@ -0,0 +1,7 @@
@@ -513,12 +451,9 @@ index 0000000..8f91889
 +obj-$(CONFIG_OVERLAYFS_FS) += overlayfs.o
 +
 +overlayfs-objs := super.o inode.o dir.o readdir.o copy_up.o
-diff --git a/fs/overlayfs/copy_up.c b/fs/overlayfs/copy_up.c
-new file mode 100644
-index 0000000..398fa1c
 --- /dev/null
 +++ b/fs/overlayfs/copy_up.c
-@@ -0,0 +1,384 @@
+@@ -0,0 +1,383 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -598,11 +533,11 @@ index 0000000..398fa1c
 +	if (len == 0)
 +		return 0;
 +
-+	old_file = ovl_path_open(old, O_RDONLY);
++	old_file = vfs_open(old, O_RDONLY, current_cred());
 +	if (IS_ERR(old_file))
 +		return PTR_ERR(old_file);
 +
-+	new_file = ovl_path_open(new, O_WRONLY);
++	new_file = vfs_open(new, O_WRONLY, current_cred());
 +	if (IS_ERR(new_file)) {
 +		error = PTR_ERR(new_file);
 +		goto out_fput;
@@ -675,8 +610,7 @@ index 0000000..398fa1c
 +static int ovl_set_timestamps(struct dentry *upperdentry, struct kstat *stat)
 +{
 +	struct iattr attr = {
-+		.ia_valid =
-+		     ATTR_ATIME | ATTR_MTIME | ATTR_ATIME_SET | ATTR_MTIME_SET,
++		.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_ATIME_SET | ATTR_MTIME_SET,
 +		.ia_atime = stat->atime,
 +		.ia_mtime = stat->mtime,
 +	};
@@ -903,9 +837,6 @@ index 0000000..398fa1c
 +	dput(parent);
 +	return err;
 +}
-diff --git a/fs/overlayfs/dir.c b/fs/overlayfs/dir.c
-new file mode 100644
-index 0000000..57bbb94
 --- /dev/null
 +++ b/fs/overlayfs/dir.c
 @@ -0,0 +1,596 @@
@@ -1229,19 +1160,19 @@ index 0000000..57bbb94
 +	return err;
 +}
 +
-+static int ovl_create(struct inode *dir, struct dentry *dentry, umode_t mode,
++static int ovl_create(struct inode *dir, struct dentry *dentry, int mode,
 +			struct nameidata *nd)
 +{
 +	return ovl_create_object(dentry, (mode & 07777) | S_IFREG, 0, NULL);
 +}
 +
-+static int ovl_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
++static int ovl_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 +{
 +	return ovl_create_object(dentry, (mode & 07777) | S_IFDIR, 0, NULL);
 +}
 +
-+static int ovl_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
-+		     dev_t rdev)
++static int ovl_mknod(struct inode *dir, struct dentry *dentry, int mode,
++		       dev_t rdev)
 +{
 +	return ovl_create_object(dentry, mode, rdev, NULL);
 +}
@@ -1505,12 +1436,9 @@ index 0000000..57bbb94
 +	.listxattr	= ovl_listxattr,
 +	.removexattr	= ovl_removexattr,
 +};
-diff --git a/fs/overlayfs/inode.c b/fs/overlayfs/inode.c
-new file mode 100644
-index 0000000..ba1a777
 --- /dev/null
 +++ b/fs/overlayfs/inode.c
-@@ -0,0 +1,384 @@
+@@ -0,0 +1,383 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -1581,8 +1509,7 @@ index 0000000..ba1a777
 +			spin_unlock(&inode->i_lock);
 +			return -ENOENT;
 +		}
-+		alias = list_entry(inode->i_dentry.next,
-+				   struct dentry, d_alias);
++		alias = list_entry(inode->i_dentry.next, struct dentry, d_alias);
 +		dget(alias);
 +		spin_unlock(&inode->i_lock);
 +		oe = alias->d_fsdata;
@@ -1808,7 +1735,7 @@ index 0000000..ba1a777
 +	return true;
 +}
 +
-+static struct file *ovl_open(struct dentry *dentry, struct file *file,
++static struct file *ovl_open(struct dentry *dentry, int flags,
 +			     const struct cred *cred)
 +{
 +	int err;
@@ -1816,8 +1743,8 @@ index 0000000..ba1a777
 +	enum ovl_path_type type;
 +
 +	type = ovl_path_real(dentry, &realpath);
-+	if (ovl_open_need_copy_up(file->f_flags, type, realpath.dentry)) {
-+		if (file->f_flags & O_TRUNC)
++	if (ovl_open_need_copy_up(flags, type, realpath.dentry)) {
++		if (flags & O_TRUNC)
 +			err = ovl_copy_up_truncate(dentry, 0);
 +		else
 +			err = ovl_copy_up(dentry);
@@ -1827,7 +1754,7 @@ index 0000000..ba1a777
 +		ovl_path_upper(dentry, &realpath);
 +	}
 +
-+	return vfs_open(&realpath, file, cred);
++	return vfs_open(&realpath, flags, cred);
 +}
 +
 +static const struct inode_operations ovl_file_inode_operations = {
@@ -1895,12 +1822,9 @@ index 0000000..ba1a777
 +	return inode;
 +
 +}
-diff --git a/fs/overlayfs/overlayfs.h b/fs/overlayfs/overlayfs.h
-new file mode 100644
-index 0000000..1dd05f7
 --- /dev/null
 +++ b/fs/overlayfs/overlayfs.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,63 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -1938,7 +1862,6 @@ index 0000000..1dd05f7
 +void ovl_dentry_update(struct dentry *dentry, struct dentry *upperdentry);
 +struct dentry *ovl_lookup(struct inode *dir, struct dentry *dentry,
 +			  struct nameidata *nd);
-+struct file *ovl_path_open(struct path *path, int flags);
 +
 +struct dentry *ovl_upper_create(struct dentry *upperdir, struct dentry *dentry,
 +				struct kstat *stat, const char *link);
@@ -1965,12 +1888,9 @@ index 0000000..1dd05f7
 +/* copy_up.c */
 +int ovl_copy_up(struct dentry *dentry);
 +int ovl_copy_up_truncate(struct dentry *dentry, loff_t size);
-diff --git a/fs/overlayfs/readdir.c b/fs/overlayfs/readdir.c
-new file mode 100644
-index 0000000..ed8fbad
 --- /dev/null
 +++ b/fs/overlayfs/readdir.c
-@@ -0,0 +1,565 @@
+@@ -0,0 +1,559 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -2144,7 +2064,7 @@ index 0000000..ed8fbad
 +	struct file *realfile;
 +	int err;
 +
-+	realfile = ovl_path_open(realpath, O_RDONLY | O_DIRECTORY);
++	realfile = vfs_open(realpath, O_RDONLY | O_DIRECTORY, current_cred());
 +	if (IS_ERR(realfile))
 +		return PTR_ERR(realfile);
 +
@@ -2219,9 +2139,8 @@ index 0000000..ed8fbad
 +	return 0;
 +}
 +
-+static inline int ovl_dir_read_merged(struct path *upperpath,
-+				      struct path *lowerpath,
-+				      struct ovl_readdir_data *rdd)
++static inline int ovl_dir_read_merged(struct path *upperpath, struct path *lowerpath,
++			       struct ovl_readdir_data *rdd)
 +{
 +	int err;
 +	struct rb_root root = RB_ROOT;
@@ -2309,8 +2228,7 @@ index 0000000..ed8fbad
 +		p = list_entry(od->cursor.next, struct ovl_cache_entry, l_node);
 +		off = file->f_pos;
 +		if (!p->is_whiteout) {
-+			over = filler(buf, p->name, p->len, off, p->ino,
-+				      p->type);
++			over = filler(buf, p->name, p->len, off, p->ino, p->type);
 +			if (over)
 +				break;
 +		}
@@ -2371,7 +2289,7 @@ index 0000000..ed8fbad
 +		struct path upperpath;
 +
 +		ovl_path_upper(file->f_path.dentry, &upperpath);
-+		od->realfile = ovl_path_open(&upperpath, O_RDONLY);
++		od->realfile = vfs_open(&upperpath, O_RDONLY, current_cred());
 +		if (IS_ERR(od->realfile))
 +			return PTR_ERR(od->realfile);
 +	}
@@ -2404,7 +2322,7 @@ index 0000000..ed8fbad
 +		return -ENOMEM;
 +
 +	type = ovl_path_real(file->f_path.dentry, &realpath);
-+	realfile = ovl_path_open(&realpath, file->f_flags);
++	realfile = vfs_open(&realpath, file->f_flags, current_cred());
 +	if (IS_ERR(realfile)) {
 +		kfree(od);
 +		return PTR_ERR(realfile);
@@ -2502,17 +2420,13 @@ index 0000000..ed8fbad
 +
 +		dentry = lookup_one_len(p->name, upperdir, p->len);
 +		if (IS_ERR(dentry)) {
-+			printk(KERN_WARNING
-+			    "overlayfs: failed to lookup whiteout %.*s: %li\n",
-+			    p->len, p->name, PTR_ERR(dentry));
++			printk(KERN_WARNING "overlayfs: failed to lookup whiteout %.*s: %li\n", p->len, p->name, PTR_ERR(dentry));
 +			continue;
 +		}
 +		ret = vfs_unlink(upperdir->d_inode, dentry);
 +		dput(dentry);
 +		if (ret)
-+			printk(KERN_WARNING
-+			    "overlayfs: failed to unlink whiteout %.*s: %i\n",
-+			    p->len, p->name, ret);
++			printk(KERN_WARNING "overlayfs: failed to unlink whiteout %.*s: %i\n", p->len, p->name, ret);
 +	}
 +	mutex_unlock(&upperdir->d_inode->i_mutex);
 +
@@ -2536,12 +2450,9 @@ index 0000000..ed8fbad
 +
 +	return err;
 +}
-diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
-new file mode 100644
-index 0000000..18042cf
 --- /dev/null
 +++ b/fs/overlayfs/super.c
-@@ -0,0 +1,611 @@
+@@ -0,0 +1,656 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -2559,17 +2470,27 @@ index 0000000..18042cf
 +#include <linux/slab.h>
 +#include <linux/parser.h>
 +#include <linux/module.h>
++#include <linux/seq_file.h>
 +#include "overlayfs.h"
 +
 +MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 +MODULE_DESCRIPTION("Overlay filesystem");
 +MODULE_LICENSE("GPL");
 +
++struct ovl_config {
++	char *lowerdir;
++	char *upperdir;
++};
++
++/* private information held for overlayfs's superblock */
 +struct ovl_fs {
 +	struct vfsmount *upper_mnt;
 +	struct vfsmount *lower_mnt;
++	/* pathnames of lower and upper dirs, for show_options */
++	struct ovl_config config;
 +};
 +
++/* private information held for every overlayfs dentry */
 +struct ovl_entry {
 +	/*
 +	 * Keep "double reference" on upper dentries, so that
@@ -2782,8 +2703,7 @@ index 0000000..18042cf
 +	return kzalloc(sizeof(struct ovl_entry), GFP_KERNEL);
 +}
 +
-+static inline struct dentry *ovl_lookup_real(struct dentry *dir,
-+					     struct qstr *name)
++static inline struct dentry *ovl_lookup_real(struct dentry *dir, struct qstr *name)
 +{
 +	struct dentry *dentry;
 +
@@ -2871,8 +2791,7 @@ index 0000000..18042cf
 +
 +		realdentry = upperdentry ? upperdentry : lowerdentry;
 +		err = -ENOMEM;
-+		inode = ovl_new_inode(dentry->d_sb, realdentry->d_inode->i_mode,
-+				      oe);
++		inode = ovl_new_inode(dentry->d_sb, realdentry->d_inode->i_mode, oe);
 +		if (!inode)
 +			goto out_dput;
 +	}
@@ -2910,12 +2829,6 @@ index 0000000..18042cf
 +	return NULL;
 +}
 +
-+struct file *ovl_path_open(struct path *path, int flags)
-+{
-+	path_get(path);
-+	return dentry_open(path->dentry, path->mnt, flags, current_cred());
-+}
-+
 +static void ovl_put_super(struct super_block *sb)
 +{
 +	struct ovl_fs *ufs = sb->s_fs_info;
@@ -2926,6 +2839,8 @@ index 0000000..18042cf
 +	mntput(ufs->upper_mnt);
 +	mntput(ufs->lower_mnt);
 +
++	kfree(ufs->config.lowerdir);
++	kfree(ufs->config.upperdir);
 +	kfree(ufs);
 +}
 +
@@ -2948,14 +2863,46 @@ index 0000000..18042cf
 +		return mnt_want_write(ufs->upper_mnt);
 +}
 +
++/**
++ * ovl_statfs
++ * @sb: The overlayfs super block
++ * @buf: The struct kstatfs to fill in with stats
++ *
++ * Get the filesystem statistics.  As writes always target the upper layer
++ * filesystem pass the statfs to the same filesystem.
++ */
++static int ovl_statfs(struct dentry *dentry, struct kstatfs *buf)
++{
++	struct dentry *root_dentry = dentry->d_sb->s_root;
++	struct path path;
++	ovl_path_upper(root_dentry, &path);
++
++	if (!path.dentry->d_sb->s_op->statfs)
++		return -ENOSYS;
++	return path.dentry->d_sb->s_op->statfs(path.dentry, buf);
++}
++
++/**
++ * ovl_show_options
++ *
++ * Prints the mount options for a given superblock.
++ * Returns zero; does not fail.
++ */
++static int ovl_show_options(struct seq_file *m, struct vfsmount *mnt)
++{
++	struct super_block *sb = mnt->mnt_sb;
++	struct ovl_fs *ufs = sb->s_fs_info;
++
++	seq_printf(m, ",lowerdir=%s", ufs->config.lowerdir);
++	seq_printf(m, ",upperdir=%s", ufs->config.upperdir);
++	return 0;
++}
++
 +static const struct super_operations ovl_super_operations = {
 +	.put_super	= ovl_put_super,
 +	.remount_fs	= ovl_remount_fs,
-+};
-+
-+struct ovl_config {
-+	char *lowerdir;
-+	char *upperdir;
++	.statfs		= ovl_statfs,
++	.show_options	= ovl_show_options,
 +};
 +
 +enum {
@@ -3015,37 +2962,36 @@ index 0000000..18042cf
 +	struct dentry *root_dentry;
 +	struct ovl_entry *oe;
 +	struct ovl_fs *ufs;
-+	struct ovl_config config;
 +	int err;
-+
-+	err = ovl_parse_opt((char *) data, &config);
-+	if (err)
-+		goto out;
-+
-+	err = -EINVAL;
-+	if (!config.upperdir || !config.lowerdir) {
-+		printk(KERN_ERR "overlayfs: missing upperdir or lowerdir\n");
-+		goto out_free_config;
-+	}
 +
 +	err = -ENOMEM;
 +	ufs = kmalloc(sizeof(struct ovl_fs), GFP_KERNEL);
 +	if (!ufs)
++		goto out;
++
++	err = ovl_parse_opt((char *) data, &ufs->config);
++	if (err)
++		goto out_free_ufs;
++
++	err = -EINVAL;
++	if (!ufs->config.upperdir || !ufs->config.lowerdir) {
++		printk(KERN_ERR "overlayfs: missing upperdir or lowerdir\n");
 +		goto out_free_config;
++	}
 +
 +	oe = ovl_alloc_entry();
 +	if (oe == NULL)
-+		goto out_free_ufs;
++		goto out_free_config;
 +
 +	root_inode = ovl_new_inode(sb, S_IFDIR, oe);
 +	if (!root_inode)
 +		goto out_free_oe;
 +
-+	err = kern_path(config.upperdir, LOOKUP_FOLLOW, &upperpath);
++	err = kern_path(ufs->config.upperdir, LOOKUP_FOLLOW, &upperpath);
 +	if (err)
 +		goto out_put_root;
 +
-+	err = kern_path(config.lowerdir, LOOKUP_FOLLOW, &lowerpath);
++	err = kern_path(ufs->config.lowerdir, LOOKUP_FOLLOW, &lowerpath);
 +	if (err)
 +		goto out_put_upperpath;
 +
@@ -3053,6 +2999,16 @@ index 0000000..18042cf
 +	if (!S_ISDIR(upperpath.dentry->d_inode->i_mode) ||
 +	    !S_ISDIR(lowerpath.dentry->d_inode->i_mode))
 +		goto out_put_lowerpath;
++
++	sb->s_stack_depth = max(upperpath.mnt->mnt_sb->s_stack_depth,
++				lowerpath.mnt->mnt_sb->s_stack_depth) + 1;
++
++	err = -EINVAL;
++	if (sb->s_stack_depth > FILESYSTEM_MAX_STACK_DEPTH) {
++		printk(KERN_ERR "overlayfs: maximum fs stacking depth exceeded\n");
++		goto out_put_lowerpath;
++	}
++
 +
 +	ufs->upper_mnt = clone_private_mount(&upperpath);
 +	err = PTR_ERR(ufs->upper_mnt);
@@ -3119,11 +3075,11 @@ index 0000000..18042cf
 +	iput(root_inode);
 +out_free_oe:
 +	kfree(oe);
++out_free_config:
++	kfree(ufs->config.lowerdir);
++	kfree(ufs->config.upperdir);
 +out_free_ufs:
 +	kfree(ufs);
-+out_free_config:
-+	kfree(config.lowerdir);
-+	kfree(config.upperdir);
 +out:
 +	return err;
 +}
@@ -3153,526 +3109,16 @@ index 0000000..18042cf
 +
 +module_init(ovl_init);
 +module_exit(ovl_exit);
--- 
-1.7.6.5
-
-From 43daf67dbebeb22a912ee2f67c9886a496f1b34b Mon Sep 17 00:00:00 2001
-From: Andy Whitcroft <apw@canonical.com>
-Date: Fri, 1 Oct 2010 18:48:02 +0100
-Subject: [PATCH] overlayfs: add statfs support
-
-Add support for statfs to the overlayfs filesystem.  As the upper layer
-is the target of all write operations assume that the space in that
-filesystem is the space in the overlayfs.  There will be some inaccuracy as
-overwriting a file will copy it up and consume space we were not expecting,
-but it is better than nothing.
-
-Use the upper layer dentry and mount from the overlayfs root inode,
-passing the statfs call to that filesystem.
-
-Signed-off-by: Andy Whitcroft <apw@canonical.com>
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/overlayfs/super.c |   20 ++++++++++++++++++++
- 1 files changed, 20 insertions(+), 0 deletions(-)
-
-diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
-index 18042cf..8091f76 100644
---- a/fs/overlayfs/super.c
-+++ b/fs/overlayfs/super.c
-@@ -404,9 +404,29 @@ static int ovl_remount_fs(struct super_block *sb, int *flagsp, char *data)
- 		return mnt_want_write(ufs->upper_mnt);
+--- a/fs/splice.c
++++ b/fs/splice.c
+@@ -1300,6 +1300,7 @@ long do_splice_direct(struct file *in, l
+ 
+ 	return ret;
  }
++EXPORT_SYMBOL(do_splice_direct);
  
-+/**
-+ * ovl_statfs
-+ * @sb: The overlayfs super block
-+ * @buf: The struct kstatfs to fill in with stats
-+ *
-+ * Get the filesystem statistics.  As writes always target the upper layer
-+ * filesystem pass the statfs to the same filesystem.
-+ */
-+static int ovl_statfs(struct dentry *dentry, struct kstatfs *buf)
-+{
-+	struct dentry *root_dentry = dentry->d_sb->s_root;
-+	struct path path;
-+	ovl_path_upper(root_dentry, &path);
-+
-+	if (!path.dentry->d_sb->s_op->statfs)
-+		return -ENOSYS;
-+	return path.dentry->d_sb->s_op->statfs(path.dentry, buf);
-+}
-+
- static const struct super_operations ovl_super_operations = {
- 	.put_super	= ovl_put_super,
- 	.remount_fs	= ovl_remount_fs,
-+	.statfs		= ovl_statfs,
- };
- 
- struct ovl_config {
--- 
-1.7.6.5
-
-From 780b25fa95056a503b0b08fdfa787775ffff3d09 Mon Sep 17 00:00:00 2001
-From: Erez Zadok <ezk@fsl.cs.sunysb.edu>
-Date: Mon, 23 May 2011 20:59:20 -0400
-Subject: [PATCH] overlayfs: implement show_options
-
-This is useful because of the stacking nature of overlayfs.  Users like to
-find out (via /proc/mounts) which lower/upper directory were used at mount
-time.
-
-Signed-off-by: Erez Zadok <ezk@cs.sunysb.edu>
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/overlayfs/super.c |   63 ++++++++++++++++++++++++++++++++++----------------
- 1 files changed, 43 insertions(+), 20 deletions(-)
-
-diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
-index 8091f76..a854f97 100644
---- a/fs/overlayfs/super.c
-+++ b/fs/overlayfs/super.c
-@@ -15,17 +15,27 @@
- #include <linux/slab.h>
- #include <linux/parser.h>
- #include <linux/module.h>
-+#include <linux/seq_file.h>
- #include "overlayfs.h"
- 
- MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
- MODULE_DESCRIPTION("Overlay filesystem");
- MODULE_LICENSE("GPL");
- 
-+struct ovl_config {
-+	char *lowerdir;
-+	char *upperdir;
-+};
-+
-+/* private information held for overlayfs's superblock */
- struct ovl_fs {
- 	struct vfsmount *upper_mnt;
- 	struct vfsmount *lower_mnt;
-+	/* pathnames of lower and upper dirs, for show_options */
-+	struct ovl_config config;
- };
- 
-+/* private information held for every overlayfs dentry */
- struct ovl_entry {
- 	/*
- 	 * Keep "double reference" on upper dentries, so that
-@@ -382,6 +392,8 @@ static void ovl_put_super(struct super_block *sb)
- 	mntput(ufs->upper_mnt);
- 	mntput(ufs->lower_mnt);
- 
-+	kfree(ufs->config.lowerdir);
-+	kfree(ufs->config.upperdir);
- 	kfree(ufs);
- }
- 
-@@ -423,15 +435,27 @@ static int ovl_statfs(struct dentry *dentry, struct kstatfs *buf)
- 	return path.dentry->d_sb->s_op->statfs(path.dentry, buf);
- }
- 
-+/**
-+ * ovl_show_options
-+ *
-+ * Prints the mount options for a given superblock.
-+ * Returns zero; does not fail.
-+ */
-+static int ovl_show_options(struct seq_file *m, struct dentry *dentry)
-+{
-+	struct super_block *sb = dentry->d_sb;
-+	struct ovl_fs *ufs = sb->s_fs_info;
-+
-+	seq_printf(m, ",lowerdir=%s", ufs->config.lowerdir);
-+	seq_printf(m, ",upperdir=%s", ufs->config.upperdir);
-+	return 0;
-+}
-+
- static const struct super_operations ovl_super_operations = {
- 	.put_super	= ovl_put_super,
- 	.remount_fs	= ovl_remount_fs,
- 	.statfs		= ovl_statfs,
--};
--
--struct ovl_config {
--	char *lowerdir;
--	char *upperdir;
-+	.show_options	= ovl_show_options,
- };
- 
- enum {
-@@ -491,37 +515,36 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
- 	struct dentry *root_dentry;
- 	struct ovl_entry *oe;
- 	struct ovl_fs *ufs;
--	struct ovl_config config;
- 	int err;
- 
--	err = ovl_parse_opt((char *) data, &config);
--	if (err)
-+	err = -ENOMEM;
-+	ufs = kmalloc(sizeof(struct ovl_fs), GFP_KERNEL);
-+	if (!ufs)
- 		goto out;
- 
-+	err = ovl_parse_opt((char *) data, &ufs->config);
-+	if (err)
-+		goto out_free_ufs;
-+
- 	err = -EINVAL;
--	if (!config.upperdir || !config.lowerdir) {
-+	if (!ufs->config.upperdir || !ufs->config.lowerdir) {
- 		printk(KERN_ERR "overlayfs: missing upperdir or lowerdir\n");
- 		goto out_free_config;
- 	}
- 
--	err = -ENOMEM;
--	ufs = kmalloc(sizeof(struct ovl_fs), GFP_KERNEL);
--	if (!ufs)
--		goto out_free_config;
--
- 	oe = ovl_alloc_entry();
- 	if (oe == NULL)
--		goto out_free_ufs;
-+		goto out_free_config;
- 
- 	root_inode = ovl_new_inode(sb, S_IFDIR, oe);
- 	if (!root_inode)
- 		goto out_free_oe;
- 
--	err = kern_path(config.upperdir, LOOKUP_FOLLOW, &upperpath);
-+	err = kern_path(ufs->config.upperdir, LOOKUP_FOLLOW, &upperpath);
- 	if (err)
- 		goto out_put_root;
- 
--	err = kern_path(config.lowerdir, LOOKUP_FOLLOW, &lowerpath);
-+	err = kern_path(ufs->config.lowerdir, LOOKUP_FOLLOW, &lowerpath);
- 	if (err)
- 		goto out_put_upperpath;
- 
-@@ -595,11 +618,11 @@ out_put_root:
- 	iput(root_inode);
- out_free_oe:
- 	kfree(oe);
-+out_free_config:
-+	kfree(ufs->config.lowerdir);
-+	kfree(ufs->config.upperdir);
- out_free_ufs:
- 	kfree(ufs);
--out_free_config:
--	kfree(config.lowerdir);
--	kfree(config.upperdir);
- out:
- 	return err;
- }
--- 
-1.7.6.5
-
-From bd166a38e40f8354a7887a62b85211181283d468 Mon Sep 17 00:00:00 2001
-From: Neil Brown <neilb@suse.de>
-Date: Wed, 21 Dec 2011 18:19:23 +0100
-Subject: [PATCH] overlay: overlay filesystem documentation
-
-Document the overlay filesystem.
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- Documentation/filesystems/overlayfs.txt |  199 +++++++++++++++++++++++++++++++
- MAINTAINERS                             |    7 +
- 2 files changed, 206 insertions(+), 0 deletions(-)
- create mode 100644 Documentation/filesystems/overlayfs.txt
-
-diff --git a/Documentation/filesystems/overlayfs.txt b/Documentation/filesystems/overlayfs.txt
-new file mode 100644
-index 0000000..7161dc3
---- /dev/null
-+++ b/Documentation/filesystems/overlayfs.txt
-@@ -0,0 +1,199 @@
-+Written by: Neil Brown <neilb@suse.de>
-+
-+Overlay Filesystem
-+==================
-+
-+This document describes a prototype for a new approach to providing
-+overlay-filesystem functionality in Linux (sometimes referred to as
-+union-filesystems).  An overlay-filesystem tries to present a
-+filesystem which is the result over overlaying one filesystem on top
-+of the other.
-+
-+The result will inevitably fail to look exactly like a normal
-+filesystem for various technical reasons.  The expectation is that
-+many use cases will be able to ignore these differences.
-+
-+This approach is 'hybrid' because the objects that appear in the
-+filesystem do not all appear to belong to that filesystem.  In many
-+cases an object accessed in the union will be indistinguishable
-+from accessing the corresponding object from the original filesystem.
-+This is most obvious from the 'st_dev' field returned by stat(2).
-+
-+While directories will report an st_dev from the overlay-filesystem,
-+all non-directory objects will report an st_dev from the lower or
-+upper filesystem that is providing the object.  Similarly st_ino will
-+only be unique when combined with st_dev, and both of these can change
-+over the lifetime of a non-directory object.  Many applications and
-+tools ignore these values and will not be affected.
-+
-+Upper and Lower
-+---------------
-+
-+An overlay filesystem combines two filesystems - an 'upper' filesystem
-+and a 'lower' filesystem.  When a name exists in both filesystems, the
-+object in the 'upper' filesystem is visible while the object in the
-+'lower' filesystem is either hidden or, in the case of directories,
-+merged with the 'upper' object.
-+
-+It would be more correct to refer to an upper and lower 'directory
-+tree' rather than 'filesystem' as it is quite possible for both
-+directory trees to be in the same filesystem and there is no
-+requirement that the root of a filesystem be given for either upper or
-+lower.
-+
-+The lower filesystem can be any filesystem supported by Linux and does
-+not need to be writable.  The lower filesystem can even be another
-+overlayfs.  The upper filesystem will normally be writable and if it
-+is it must support the creation of trusted.* extended attributes, and
-+must provide valid d_type in readdir responses, at least for symbolic
-+links - so NFS is not suitable.
-+
-+A read-only overlay of two read-only filesystems may use any
-+filesystem type.
-+
-+Directories
-+-----------
-+
-+Overlaying mainly involved directories.  If a given name appears in both
-+upper and lower filesystems and refers to a non-directory in either,
-+then the lower object is hidden - the name refers only to the upper
-+object.
-+
-+Where both upper and lower objects are directories, a merged directory
-+is formed.
-+
-+At mount time, the two directories given as mount options are combined
-+into a merged directory:
-+
-+  mount -t overlayfs overlayfs -olowerdir=/lower,upperdir=/upper /overlay
-+
-+Then whenever a lookup is requested in such a merged directory, the
-+lookup is performed in each actual directory and the combined result
-+is cached in the dentry belonging to the overlay filesystem.  If both
-+actual lookups find directories, both are stored and a merged
-+directory is created, otherwise only one is stored: the upper if it
-+exists, else the lower.
-+
-+Only the lists of names from directories are merged.  Other content
-+such as metadata and extended attributes are reported for the upper
-+directory only.  These attributes of the lower directory are hidden.
-+
-+whiteouts and opaque directories
-+--------------------------------
-+
-+In order to support rm and rmdir without changing the lower
-+filesystem, an overlay filesystem needs to record in the upper filesystem
-+that files have been removed.  This is done using whiteouts and opaque
-+directories (non-directories are always opaque).
-+
-+The overlay filesystem uses extended attributes with a
-+"trusted.overlay."  prefix to record these details.
-+
-+A whiteout is created as a symbolic link with target
-+"(overlay-whiteout)" and with xattr "trusted.overlay.whiteout" set to "y".
-+When a whiteout is found in the upper level of a merged directory, any
-+matching name in the lower level is ignored, and the whiteout itself
-+is also hidden.
-+
-+A directory is made opaque by setting the xattr "trusted.overlay.opaque"
-+to "y".  Where the upper filesystem contains an opaque directory, any
-+directory in the lower filesystem with the same name is ignored.
-+
-+readdir
-+-------
-+
-+When a 'readdir' request is made on a merged directory, the upper and
-+lower directories are each read and the name lists merged in the
-+obvious way (upper is read first, then lower - entries that already
-+exist are not re-added).  This merged name list is cached in the
-+'struct file' and so remains as long as the file is kept open.  If the
-+directory is opened and read by two processes at the same time, they
-+will each have separate caches.  A seekdir to the start of the
-+directory (offset 0) followed by a readdir will cause the cache to be
-+discarded and rebuilt.
-+
-+This means that changes to the merged directory do not appear while a
-+directory is being read.  This is unlikely to be noticed by many
-+programs.
-+
-+seek offsets are assigned sequentially when the directories are read.
-+Thus if
-+  - read part of a directory
-+  - remember an offset, and close the directory
-+  - re-open the directory some time later
-+  - seek to the remembered offset
-+
-+there may be little correlation between the old and new locations in
-+the list of filenames, particularly if anything has changed in the
-+directory.
-+
-+Readdir on directories that are not merged is simply handled by the
-+underlying directory (upper or lower).
-+
-+
-+Non-directories
-+---------------
-+
-+Objects that are not directories (files, symlinks, device-special
-+files etc.) are presented either from the upper or lower filesystem as
-+appropriate.  When a file in the lower filesystem is accessed in a way
-+the requires write-access, such as opening for write access, changing
-+some metadata etc., the file is first copied from the lower filesystem
-+to the upper filesystem (copy_up).  Note that creating a hard-link
-+also requires copy_up, though of course creation of a symlink does
-+not.
-+
-+The copy_up may turn out to be unnecessary, for example if the file is
-+opened for read-write but the data is not modified.
-+
-+The copy_up process first makes sure that the containing directory
-+exists in the upper filesystem - creating it and any parents as
-+necessary.  It then creates the object with the same metadata (owner,
-+mode, mtime, symlink-target etc.) and then if the object is a file, the
-+data is copied from the lower to the upper filesystem.  Finally any
-+extended attributes are copied up.
-+
-+Once the copy_up is complete, the overlay filesystem simply
-+provides direct access to the newly created file in the upper
-+filesystem - future operations on the file are barely noticed by the
-+overlay filesystem (though an operation on the name of the file such as
-+rename or unlink will of course be noticed and handled).
-+
-+
-+Non-standard behavior
-+---------------------
-+
-+The copy_up operation essentially creates a new, identical file and
-+moves it over to the old name.  The new file may be on a different
-+filesystem, so both st_dev and st_ino of the file may change.
-+
-+Any open files referring to this inode will access the old data and
-+metadata.  Similarly any file locks obtained before copy_up will not
-+apply to the copied up file.
-+
-+On a file is opened with O_RDONLY fchmod(2), fchown(2), futimesat(2)
-+and fsetxattr(2) will fail with EROFS.
-+
-+If a file with multiple hard links is copied up, then this will
-+"break" the link.  Changes will not be propagated to other names
-+referring to the same inode.
-+
-+Symlinks in /proc/PID/ and /proc/PID/fd which point to a non-directory
-+object in overlayfs will not contain vaid absolute paths, only
-+relative paths leading up to the filesystem's root.  This will be
-+fixed in the future.
-+
-+Some operations are not atomic, for example a crash during copy_up or
-+rename will leave the filesystem in an inconsitent state.  This will
-+be addressed in the future.
-+
-+Changes to underlying filesystems
-+---------------------------------
-+
-+Offline changes, when the overlay is not mounted, are allowed to either
-+the upper or the lower trees.
-+
-+Changes to the underlying filesystems while part of a mounted overlay
-+filesystem are not allowed.  If the underlying filesystem is changed,
-+the behavior of the overlay is undefined, though it will not result in
-+a crash or deadlock.
-diff --git a/MAINTAINERS b/MAINTAINERS
-index 6afba60..32c77da 100644
---- a/MAINTAINERS
-+++ b/MAINTAINERS
-@@ -4902,6 +4902,13 @@ F:	drivers/scsi/osd/
- F:	include/scsi/osd_*
- F:	fs/exofs/
- 
-+OVERLAYFS FILESYSTEM
-+M:	Miklos Szeredi <miklos@szeredi.hu>
-+L:	linux-fsdevel@vger.kernel.org
-+S:	Supported
-+F:	fs/overlayfs/*
-+F:	Documentation/filesystems/overlayfs.txt
-+
- P54 WIRELESS DRIVER
- M:	Christian Lamparter <chunkeey@googlemail.com>
- L:	linux-wireless@vger.kernel.org
--- 
-1.7.6.5
-
-From ba7cb041172d05c44957e320708c2c169c71f37b Mon Sep 17 00:00:00 2001
-From: Miklos Szeredi <mszeredi@suse.cz>
-Date: Wed, 21 Dec 2011 18:19:23 +0100
-Subject: [PATCH] fs: limit filesystem stacking depth
-
-Add a simple read-only counter to super_block that indicates deep this
-is in the stack of filesystems.  Previously ecryptfs was the only
-stackable filesystem and it explicitly disallowed multiple layers of
-itself.
-
-Overlayfs, however, can be stacked recursively and also may be stacked
-on top of ecryptfs or vice versa.
-
-To limit the kernel stack usage we must limit the depth of the
-filesystem stack.  Initially the limit is set to 2.
-
-Signed-off-by: Miklos Szeredi <mszeredi@suse.cz>
----
- fs/ecryptfs/main.c   |    7 +++++++
- fs/overlayfs/super.c |   10 ++++++++++
- include/linux/fs.h   |   11 +++++++++++
- 3 files changed, 28 insertions(+), 0 deletions(-)
-
-diff --git a/fs/ecryptfs/main.c b/fs/ecryptfs/main.c
-index b4a6bef..703cda3 100644
---- a/fs/ecryptfs/main.c
-+++ b/fs/ecryptfs/main.c
-@@ -544,6 +544,13 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
- 	s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
- 	s->s_blocksize = path.dentry->d_sb->s_blocksize;
- 	s->s_magic = ECRYPTFS_SUPER_MAGIC;
-+	s->s_stack_depth = path.dentry->d_sb->s_stack_depth + 1;
-+
-+	rc = -EINVAL;
-+	if (s->s_stack_depth > FILESYSTEM_MAX_STACK_DEPTH) {
-+		printk(KERN_ERR "eCryptfs: maximum fs stacking depth exceeded\n");
-+		goto out_free;
-+	}
- 
- 	inode = ecryptfs_get_inode(path.dentry->d_inode, s);
- 	rc = PTR_ERR(inode);
-diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
-index a854f97..10cafe0 100644
---- a/fs/overlayfs/super.c
-+++ b/fs/overlayfs/super.c
-@@ -553,6 +553,16 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
- 	    !S_ISDIR(lowerpath.dentry->d_inode->i_mode))
- 		goto out_put_lowerpath;
- 
-+	sb->s_stack_depth = max(upperpath.mnt->mnt_sb->s_stack_depth,
-+				lowerpath.mnt->mnt_sb->s_stack_depth) + 1;
-+
-+	err = -EINVAL;
-+	if (sb->s_stack_depth > FILESYSTEM_MAX_STACK_DEPTH) {
-+		printk(KERN_ERR "overlayfs: maximum fs stacking depth exceeded\n");
-+		goto out_put_lowerpath;
-+	}
-+
-+
- 	ufs->upper_mnt = clone_private_mount(&upperpath);
- 	err = PTR_ERR(ufs->upper_mnt);
- 	if (IS_ERR(ufs->upper_mnt)) {
-diff --git a/include/linux/fs.h b/include/linux/fs.h
-index c744032..7b831f2 100644
+ static int splice_pipe_to_pipe(struct pipe_inode_info *ipipe,
+ 			       struct pipe_inode_info *opipe,
 --- a/include/linux/fs.h
 +++ b/include/linux/fs.h
 @@ -482,6 +482,12 @@ struct iattr {
@@ -3688,7 +3134,7 @@ index c744032..7b831f2 100644
  /** 
   * enum positive_aop_returns - aop return codes with specific semantics
   *
-@@ -1481,6 +1487,11 @@
+@@ -1481,6 +1487,11 @@ struct super_block {
  	int cleancache_poolid;
  
  	struct shrinker s_shrink;	/* per-sb shrinker handle */
@@ -3700,54 +3146,31 @@ index c744032..7b831f2 100644
  };
  
  /* superblock cache pruning functions */
--- 
-1.7.6.5
-
-From c16e5b47f3442ab412c02092ed4cb7db1bc1a962 Mon Sep 17 00:00:00 2001
-From: Andy Whitcroft <apw@canonical.com>
-Date: Tue, 17 Jan 2012 11:48:23 +0000
-Subject: [PATCH] overlayfs: apply device cgroup and security permissions to
- overlay files
-
-When checking permissions on an overlayfs inode we do not take into
-account either device cgroup restrictions nor security permissions.
-This allows a user to mount an overlayfs layer over a restricted device
-directory and by pass those permissions to open otherwise restricted
-files.
-
-Use devcgroup_inode_permission() and security_inode_permission() against
-the underlying inodes when calculating ovl_permission().
-
-Signed-off-by: Andy Whitcroft <apw@canonical.com>
----
- fs/overlayfs/inode.c |    7 +++++++
- 1 files changed, 7 insertions(+), 0 deletions(-)
-
-diff --git a/fs/overlayfs/inode.c b/fs/overlayfs/inode.c
-index ba1a777..1145a76 100644
---- a/fs/overlayfs/inode.c
-+++ b/fs/overlayfs/inode.c
-@@ -10,6 +10,8 @@
- #include <linux/fs.h>
- #include <linux/slab.h>
- #include <linux/xattr.h>
-+#include <linux/device_cgroup.h>
-+#include <linux/security.h>
- #include "overlayfs.h"
+@@ -1638,6 +1649,7 @@ struct inode_operations {
+ 	void (*truncate_range)(struct inode *, loff_t, loff_t);
+ 	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start,
+ 		      u64 len);
++	struct file *(*open)(struct dentry *, int flags, const struct cred *);
+ } ____cacheline_aligned;
  
- int ovl_setattr(struct dentry *dentry, struct iattr *attr)
-@@ -118,6 +120,11 @@ int ovl_permission(struct inode *inode, int mask)
- 		err = realinode->i_op->permission(realinode, mask);
- 	else
- 		err = generic_permission(realinode, mask);
+ struct seq_file;
+@@ -2058,6 +2070,7 @@ extern long do_sys_open(int dfd, const c
+ extern struct file *filp_open(const char *, int, int);
+ extern struct file *file_open_root(struct dentry *, struct vfsmount *,
+ 				   const char *, int);
++extern struct file *vfs_open(struct path *, int flags, const struct cred *);
+ extern struct file * dentry_open(struct dentry *, struct vfsmount *, int,
+ 				 const struct cred *);
+ extern int filp_close(struct file *, fl_owner_t id);
+--- a/include/linux/mount.h
++++ b/include/linux/mount.h
+@@ -100,6 +100,9 @@ extern void mnt_pin(struct vfsmount *mnt
+ extern void mnt_unpin(struct vfsmount *mnt);
+ extern int __mnt_is_readonly(struct vfsmount *mnt);
+ 
++struct path;
++extern struct vfsmount *clone_private_mount(struct path *path);
 +
-+	if (!err)
-+		err = devcgroup_inode_permission(realinode, mask);
-+	if (!err)
-+		err = security_inode_permission(realinode, mask);
- out_dput:
- 	dput(alias);
- 	return err;
--- 
-1.7.5.4
-
+ extern struct vfsmount *do_kern_mount(const char *fstype, int flags,
+ 				      const char *name, void *data);
+ 
