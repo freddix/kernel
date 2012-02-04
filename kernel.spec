@@ -78,6 +78,7 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
+Patch3:		kernel-i915-gpu-finish.patch
 # BFS
 Patch100:	http://ck.kolivas.org/patches/bfs/3.1.0/3.1-sched-bfs-415.patch
 # BFQ
@@ -270,6 +271,7 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 
 %if %{with bfs}
 %patch100 -p1
@@ -665,9 +667,6 @@ fi
 /lib/modules/%{kernel_release}/kernel/security
 /lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
 /lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
-%if %{with bfq}
-/lib/modules/%{kernel_release}/kernel/block
-%endif
 
 %dir %{_sysconfdir}/modprobe.d/%{kernel_release}
 
