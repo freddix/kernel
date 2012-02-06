@@ -21,7 +21,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.2
-%define		postver		.1
+%define		postver		.5
 %define		rel		1
 
 %if %{with perf}
@@ -60,7 +60,7 @@ Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	364066fa18767ec0ae5f4e4abcf9dc51
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	62ac6ac9b870162f693ecf5e8606423a
+# Source1-md5:	89cb9fb7ed01dccb15510435fb1e5024
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -338,22 +338,6 @@ BuildConfig() {
 	CONFIG_TRACING=y
 	CONFIG_CONTEXT_SWITCH_TRACER=y
 	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
-	%if 0
-	CONFIG_TOI=y
-	CONFIG_TOI_CORE=y
-	CONFIG_TOI_CRYPTO=y
-	CONFIG_TOI_USERUI=y
-	CONFIG_TOI_USERUI_DEFAULT_PATH="/sbin/tuxoniceui_text"
-	CONFIG_TOI_REPLACE_SWSUSP=y
-	CONFIG_TOI_DEFAULT_WAIT=25
-	CONFIG_TOI_DEFAULT_EXTRA_PAGES_ALLOWANCE=2000
-	CONFIG_TOI_FILE=y
-	CONFIG_TOI_SWAP=y
-	CONFIG_TOI_KEEP_IMAGE=n
-	CONFIG_TOI_IGNORE_LATE_INITCALL=n
-	CONFIG_TOI_CHECKSUM=n
-	CONFIG_CRYPTO_LZF=m
-	%endif
 %else
 	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=n
 	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
