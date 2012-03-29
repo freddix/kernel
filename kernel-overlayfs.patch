@@ -1,3 +1,21 @@
+--- a/Documentation/filesystems/Locking
++++ b/Documentation/filesystems/Locking
+@@ -62,6 +62,7 @@ ata *);
+ 	int (*removexattr) (struct dentry *, const char *);
+ 	void (*truncate_range)(struct inode *, loff_t, loff_t);
+ 	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start, u64 len);
++	struct file *(*open)(struct dentry *,struct file *,const struct cred *);
+ 
+ locking rules:
+ 	all may block
+@@ -89,6 +90,7 @@ listxattr:	no
+ removexattr:	yes
+ truncate_range:	yes
+ fiemap:		no
++open:		no
+ 	Additionally, ->rmdir(), ->unlink() and ->rename() have ->i_mutex on
+ victim.
+ 	cross-directory ->rename() has (per-superblock) ->s_vfs_rename_sem.
 --- /dev/null
 +++ b/Documentation/filesystems/overlayfs.txt
 @@ -0,0 +1,199 @@
@@ -200,9 +218,33 @@
 +filesystem are not allowed.  If the underlying filesystem is changed,
 +the behavior of the overlay is undefined, though it will not result in
 +a crash or deadlock.
+--- a/Documentation/filesystems/vfs.txt
++++ b/Documentation/filesystems/vfs.txt
+@@ -364,6 +364,8 @@ struct inode_operations {
+ 	ssize_t (*listxattr) (struct dentry *, char *, size_t);
+ 	int (*removexattr) (struct dentry *, const char *);
+ 	void (*truncate_range)(struct inode *, loff_t, loff_t);
++	struct file *(*open) (struct dentry *, struct file *,
++			      const struct cred *);
+ };
+ 
+ Again, all methods are called without any locks being held, unless
+@@ -475,6 +477,12 @@ otherwise noted.
+   truncate_range: a method provided by the underlying filesystem to truncate a
+   	range of blocks , i.e. punch a hole somewhere in a file.
+ 
++  open: this is an alternative to f_op->open(), the difference is that this
++	method may return any open file, not necessarily originating from the
++	same filesystem as the one i_op->open() was called on.  It may be useful
++	for stacking filesystems which want to allow native I/O directly on
++	underlying files.
++
+ 
+ The Address Space Object
+ ========================
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
-@@ -4901,6 +4901,13 @@ F:	drivers/scsi/osd/
+@@ -4955,6 +4955,13 @@ F:	drivers/scsi/osd/
  F:	include/scsi/osd_*
  F:	fs/exofs/
  
@@ -228,7 +270,7 @@
  	tristate "Character device in Userspace support"
 --- a/fs/Makefile
 +++ b/fs/Makefile
-@@ -104,6 +104,7 @@ obj-$(CONFIG_QNX4FS_FS)		+= qnx4/
+@@ -105,6 +105,7 @@ obj-$(CONFIG_QNX4FS_FS)		+= qnx4/
  obj-$(CONFIG_AUTOFS4_FS)	+= autofs4/
  obj-$(CONFIG_ADFS_FS)		+= adfs/
  obj-$(CONFIG_FUSE_FS)		+= fuse/
@@ -254,24 +296,25 @@
  	rc = PTR_ERR(inode);
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
-@@ -1492,6 +1492,23 @@ void drop_collected_mounts(struct vfsmou
+@@ -1325,6 +1325,24 @@ void drop_collected_mounts(struct vfsmou
  	release_mounts(&umount_list);
  }
  
 +struct vfsmount *clone_private_mount(struct path *path)
 +{
-+	struct vfsmount *mnt;
++	struct mount *old_mnt = real_mount(path->mnt);
++	struct mount *new_mnt;
 +
-+	if (IS_MNT_UNBINDABLE(path->mnt))
++	if (IS_MNT_UNBINDABLE(old_mnt))
 +		return ERR_PTR(-EINVAL);
 +
 +	down_read(&namespace_sem);
-+	mnt = clone_mnt(path->mnt, path->dentry, CL_PRIVATE);
++	new_mnt = clone_mnt(old_mnt, path->dentry, CL_PRIVATE);
 +	up_read(&namespace_sem);
-+	if (!mnt)
++	if (!new_mnt)
 +		return ERR_PTR(-ENOMEM);
 +
-+	return mnt;
++	return &new_mnt->mnt;
 +}
 +EXPORT_SYMBOL_GPL(clone_private_mount);
 +
@@ -280,17 +323,19 @@
  {
 --- a/fs/open.c
 +++ b/fs/open.c
-@@ -644,8 +644,7 @@ static inline int __get_file_write_acces
+@@ -644,24 +644,24 @@ static inline int __get_file_write_acces
  	return error;
  }
  
 -static struct file *__dentry_open(struct dentry *dentry, struct vfsmount *mnt,
 -					struct file *f,
+-					int (*open)(struct inode *, struct file *),
+-					const struct cred *cred)
 +static struct file *__dentry_open(struct path *path, struct file *f,
- 					int (*open)(struct inode *, struct file *),
- 					const struct cred *cred)
++				  int (*open)(struct inode *, struct file *),
++				  const struct cred *cred)
  {
-@@ -653,15 +652,16 @@ static struct file *__dentry_open(struct
+ 	static const struct file_operations empty_fops = {};
  	struct inode *inode;
  	int error;
  
@@ -355,85 +400,78 @@
  					     open, cred);
  out:
  	return nd->intent.open.file;
-@@ -798,10 +796,17 @@ struct file *nameidata_to_filp(struct na
+@@ -797,11 +795,9 @@ struct file *nameidata_to_filp(struct na
+ 	nd->intent.open.file = NULL;
  
  	/* Has the filesystem initialised the file for us? */
- 	if (filp->f_path.dentry == NULL) {
+-	if (filp->f_path.dentry == NULL) {
 -		path_get(&nd->path);
 -		filp = __dentry_open(nd->path.dentry, nd->path.mnt, filp,
 -				     NULL, cred);
-+		struct inode *inode = nd->path.dentry->d_inode;
-+
-+		if (inode->i_op->open) {
-+			int flags = filp->f_flags;
-+			put_filp(filp);
-+			filp = inode->i_op->open(nd->path.dentry, flags, cred);
-+		} else {
-+			filp = __dentry_open(&nd->path, filp, NULL, cred);
-+		}
- 	}
+-	}
++	if (filp->f_path.dentry == NULL)
++		filp = vfs_open(&nd->path, filp, cred);
 +
  	return filp;
  }
  
-@@ -812,26 +817,45 @@ struct file *nameidata_to_filp(struct na
+@@ -812,27 +808,48 @@ struct file *nameidata_to_filp(struct na
  struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags,
  			 const struct cred *cred)
  {
 -	int error;
--	struct file *f;
--
--	validate_creds(cred);
-+	struct path path = { .dentry = dentry, .mnt = mnt };
+ 	struct file *f;
 +	struct file *ret;
++	struct path path = { .dentry = dentry, .mnt = mnt };
+ 
+ 	validate_creds(cred);
  
  	/* We must always pass in a valid mount pointer. */
  	BUG_ON(!mnt);
  
 -	error = -ENFILE;
-+	ret = vfs_open(&path, flags, cred);
-+	path_put(&path);
-+
-+	return ret;
-+}
-+EXPORT_SYMBOL(dentry_open);
-+
-+/**
-+ * vfs_open - open the file at the given path
-+ * @path: path to open
-+ * @flags: open flags
-+ * @cred: credentials to use
-+ *
-+ * Open the file.  If successful, the returned file will have acquired
-+ * an additional reference for path.
-+ */
-+struct file *vfs_open(struct path *path, int flags, const struct cred *cred)
-+{
-+	struct file *f;
-+	struct inode *inode = path->dentry->d_inode;
-+
-+	validate_creds(cred);
-+
-+	if (inode->i_op->open)
-+		return inode->i_op->open(path->dentry, flags, cred);
++	ret = ERR_PTR(-ENFILE);
  	f = get_empty_filp();
 -	if (f == NULL) {
 -		dput(dentry);
 -		mntput(mnt);
 -		return ERR_PTR(error);
--	}
-+	if (f == NULL)
-+		return ERR_PTR(-ENFILE);
++	if (f != NULL) {
++		f->f_flags = flags;
++		ret = vfs_open(&path, f, cred);
+ 	}
++	path_put(&path);
  
- 	f->f_flags = flags;
+-	f->f_flags = flags;
 -	return __dentry_open(dentry, mnt, f, NULL, cred);
-+	return __dentry_open(path, f, NULL, cred);
++	return ret;
  }
--EXPORT_SYMBOL(dentry_open);
-+EXPORT_SYMBOL(vfs_open);
+ EXPORT_SYMBOL(dentry_open);
  
++/**
++ * vfs_open - open the file at the given path
++ * @path: path to open
++ * @filp: newly allocated file with f_flag initialized
++ * @cred: credentials to use
++ *
++ * Open the file.  If successful, the returned file will have acquired
++ * an additional reference for path.
++ */
++struct file *vfs_open(struct path *path, struct file *filp,
++		      const struct cred *cred)
++{
++	struct inode *inode = path->dentry->d_inode;
++
++	if (inode->i_op->open)
++		return inode->i_op->open(path->dentry, filp, cred);
++	else
++		return __dentry_open(path, filp, NULL, cred);
++}
++EXPORT_SYMBOL(vfs_open);
++
  static void __put_unused_fd(struct files_struct *files, unsigned int fd)
  {
+ 	struct fdtable *fdt = files_fdtable(files);
 --- /dev/null
 +++ b/fs/overlayfs/Kconfig
 @@ -0,0 +1,4 @@
@@ -453,7 +491,7 @@
 +overlayfs-objs := super.o inode.o dir.o readdir.o copy_up.o
 --- /dev/null
 +++ b/fs/overlayfs/copy_up.c
-@@ -0,0 +1,383 @@
+@@ -0,0 +1,384 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -533,11 +571,11 @@
 +	if (len == 0)
 +		return 0;
 +
-+	old_file = vfs_open(old, O_RDONLY, current_cred());
++	old_file = ovl_path_open(old, O_RDONLY);
 +	if (IS_ERR(old_file))
 +		return PTR_ERR(old_file);
 +
-+	new_file = vfs_open(new, O_WRONLY, current_cred());
++	new_file = ovl_path_open(new, O_WRONLY);
 +	if (IS_ERR(new_file)) {
 +		error = PTR_ERR(new_file);
 +		goto out_fput;
@@ -610,7 +648,8 @@
 +static int ovl_set_timestamps(struct dentry *upperdentry, struct kstat *stat)
 +{
 +	struct iattr attr = {
-+		.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_ATIME_SET | ATTR_MTIME_SET,
++		.ia_valid =
++		     ATTR_ATIME | ATTR_MTIME | ATTR_ATIME_SET | ATTR_MTIME_SET,
 +		.ia_atime = stat->atime,
 +		.ia_mtime = stat->mtime,
 +	};
@@ -1160,19 +1199,19 @@
 +	return err;
 +}
 +
-+static int ovl_create(struct inode *dir, struct dentry *dentry, int mode,
++static int ovl_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 +			struct nameidata *nd)
 +{
 +	return ovl_create_object(dentry, (mode & 07777) | S_IFREG, 0, NULL);
 +}
 +
-+static int ovl_mkdir(struct inode *dir, struct dentry *dentry, int mode)
++static int ovl_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 +{
 +	return ovl_create_object(dentry, (mode & 07777) | S_IFDIR, 0, NULL);
 +}
 +
-+static int ovl_mknod(struct inode *dir, struct dentry *dentry, int mode,
-+		       dev_t rdev)
++static int ovl_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
++		     dev_t rdev)
 +{
 +	return ovl_create_object(dentry, mode, rdev, NULL);
 +}
@@ -1438,7 +1477,7 @@
 +};
 --- /dev/null
 +++ b/fs/overlayfs/inode.c
-@@ -0,0 +1,383 @@
+@@ -0,0 +1,384 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -1509,7 +1548,8 @@
 +			spin_unlock(&inode->i_lock);
 +			return -ENOENT;
 +		}
-+		alias = list_entry(inode->i_dentry.next, struct dentry, d_alias);
++		alias = list_entry(inode->i_dentry.next,
++				   struct dentry, d_alias);
 +		dget(alias);
 +		spin_unlock(&inode->i_lock);
 +		oe = alias->d_fsdata;
@@ -1735,7 +1775,7 @@
 +	return true;
 +}
 +
-+static struct file *ovl_open(struct dentry *dentry, int flags,
++static struct file *ovl_open(struct dentry *dentry, struct file *file,
 +			     const struct cred *cred)
 +{
 +	int err;
@@ -1743,8 +1783,8 @@
 +	enum ovl_path_type type;
 +
 +	type = ovl_path_real(dentry, &realpath);
-+	if (ovl_open_need_copy_up(flags, type, realpath.dentry)) {
-+		if (flags & O_TRUNC)
++	if (ovl_open_need_copy_up(file->f_flags, type, realpath.dentry)) {
++		if (file->f_flags & O_TRUNC)
 +			err = ovl_copy_up_truncate(dentry, 0);
 +		else
 +			err = ovl_copy_up(dentry);
@@ -1754,7 +1794,7 @@
 +		ovl_path_upper(dentry, &realpath);
 +	}
 +
-+	return vfs_open(&realpath, flags, cred);
++	return vfs_open(&realpath, file, cred);
 +}
 +
 +static const struct inode_operations ovl_file_inode_operations = {
@@ -1824,7 +1864,7 @@
 +}
 --- /dev/null
 +++ b/fs/overlayfs/overlayfs.h
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,64 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -1862,6 +1902,7 @@
 +void ovl_dentry_update(struct dentry *dentry, struct dentry *upperdentry);
 +struct dentry *ovl_lookup(struct inode *dir, struct dentry *dentry,
 +			  struct nameidata *nd);
++struct file *ovl_path_open(struct path *path, int flags);
 +
 +struct dentry *ovl_upper_create(struct dentry *upperdir, struct dentry *dentry,
 +				struct kstat *stat, const char *link);
@@ -1890,7 +1931,7 @@
 +int ovl_copy_up_truncate(struct dentry *dentry, loff_t size);
 --- /dev/null
 +++ b/fs/overlayfs/readdir.c
-@@ -0,0 +1,559 @@
+@@ -0,0 +1,565 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -2064,7 +2105,7 @@
 +	struct file *realfile;
 +	int err;
 +
-+	realfile = vfs_open(realpath, O_RDONLY | O_DIRECTORY, current_cred());
++	realfile = ovl_path_open(realpath, O_RDONLY | O_DIRECTORY);
 +	if (IS_ERR(realfile))
 +		return PTR_ERR(realfile);
 +
@@ -2139,8 +2180,9 @@
 +	return 0;
 +}
 +
-+static inline int ovl_dir_read_merged(struct path *upperpath, struct path *lowerpath,
-+			       struct ovl_readdir_data *rdd)
++static inline int ovl_dir_read_merged(struct path *upperpath,
++				      struct path *lowerpath,
++				      struct ovl_readdir_data *rdd)
 +{
 +	int err;
 +	struct rb_root root = RB_ROOT;
@@ -2228,7 +2270,8 @@
 +		p = list_entry(od->cursor.next, struct ovl_cache_entry, l_node);
 +		off = file->f_pos;
 +		if (!p->is_whiteout) {
-+			over = filler(buf, p->name, p->len, off, p->ino, p->type);
++			over = filler(buf, p->name, p->len, off, p->ino,
++				      p->type);
 +			if (over)
 +				break;
 +		}
@@ -2289,7 +2332,7 @@
 +		struct path upperpath;
 +
 +		ovl_path_upper(file->f_path.dentry, &upperpath);
-+		od->realfile = vfs_open(&upperpath, O_RDONLY, current_cred());
++		od->realfile = ovl_path_open(&upperpath, O_RDONLY);
 +		if (IS_ERR(od->realfile))
 +			return PTR_ERR(od->realfile);
 +	}
@@ -2322,7 +2365,7 @@
 +		return -ENOMEM;
 +
 +	type = ovl_path_real(file->f_path.dentry, &realpath);
-+	realfile = vfs_open(&realpath, file->f_flags, current_cred());
++	realfile = ovl_path_open(&realpath, file->f_flags);
 +	if (IS_ERR(realfile)) {
 +		kfree(od);
 +		return PTR_ERR(realfile);
@@ -2420,13 +2463,17 @@
 +
 +		dentry = lookup_one_len(p->name, upperdir, p->len);
 +		if (IS_ERR(dentry)) {
-+			printk(KERN_WARNING "overlayfs: failed to lookup whiteout %.*s: %li\n", p->len, p->name, PTR_ERR(dentry));
++			printk(KERN_WARNING
++			    "overlayfs: failed to lookup whiteout %.*s: %li\n",
++			    p->len, p->name, PTR_ERR(dentry));
 +			continue;
 +		}
 +		ret = vfs_unlink(upperdir->d_inode, dentry);
 +		dput(dentry);
 +		if (ret)
-+			printk(KERN_WARNING "overlayfs: failed to unlink whiteout %.*s: %i\n", p->len, p->name, ret);
++			printk(KERN_WARNING
++			    "overlayfs: failed to unlink whiteout %.*s: %i\n",
++			    p->len, p->name, ret);
 +	}
 +	mutex_unlock(&upperdir->d_inode->i_mutex);
 +
@@ -2452,7 +2499,7 @@
 +}
 --- /dev/null
 +++ b/fs/overlayfs/super.c
-@@ -0,0 +1,656 @@
+@@ -0,0 +1,664 @@
 +/*
 + *
 + * Copyright (C) 2011 Novell Inc.
@@ -2703,7 +2750,8 @@
 +	return kzalloc(sizeof(struct ovl_entry), GFP_KERNEL);
 +}
 +
-+static inline struct dentry *ovl_lookup_real(struct dentry *dir, struct qstr *name)
++static inline struct dentry *ovl_lookup_real(struct dentry *dir,
++					     struct qstr *name)
 +{
 +	struct dentry *dentry;
 +
@@ -2791,7 +2839,8 @@
 +
 +		realdentry = upperdentry ? upperdentry : lowerdentry;
 +		err = -ENOMEM;
-+		inode = ovl_new_inode(dentry->d_sb, realdentry->d_inode->i_mode, oe);
++		inode = ovl_new_inode(dentry->d_sb, realdentry->d_inode->i_mode,
++				      oe);
 +		if (!inode)
 +			goto out_dput;
 +	}
@@ -2827,6 +2876,12 @@
 +		return ERR_PTR(err);
 +
 +	return NULL;
++}
++
++struct file *ovl_path_open(struct path *path, int flags)
++{
++	path_get(path);
++	return dentry_open(path->dentry, path->mnt, flags, current_cred());
 +}
 +
 +static void ovl_put_super(struct super_block *sb)
@@ -2888,9 +2943,9 @@
 + * Prints the mount options for a given superblock.
 + * Returns zero; does not fail.
 + */
-+static int ovl_show_options(struct seq_file *m, struct vfsmount *mnt)
++static int ovl_show_options(struct seq_file *m, struct dentry *dentry)
 +{
-+	struct super_block *sb = mnt->mnt_sb;
++	struct super_block *sb = dentry->d_sb;
 +	struct ovl_fs *ufs = sb->s_fs_info;
 +
 +	seq_printf(m, ",lowerdir=%s", ufs->config.lowerdir);
@@ -3111,7 +3166,7 @@
 +module_exit(ovl_exit);
 --- a/fs/splice.c
 +++ b/fs/splice.c
-@@ -1300,6 +1300,7 @@ long do_splice_direct(struct file *in, l
+@@ -1299,6 +1299,7 @@ long do_splice_direct(struct file *in, l
  
  	return ret;
  }
@@ -3121,7 +3176,7 @@
  			       struct pipe_inode_info *opipe,
 --- a/include/linux/fs.h
 +++ b/include/linux/fs.h
-@@ -482,6 +482,12 @@ struct iattr {
+@@ -484,6 +484,12 @@ struct iattr {
   */
  #include <linux/quota.h>
  
@@ -3134,10 +3189,10 @@
  /** 
   * enum positive_aop_returns - aop return codes with specific semantics
   *
-@@ -1481,6 +1487,11 @@ struct super_block {
- 	int cleancache_poolid;
+@@ -1496,6 +1502,11 @@ struct super_block {
  
- 	struct shrinker s_shrink;	/* per-sb shrinker handle */
+ 	/* Being remounted read-only */
+ 	int s_readonly_remount;
 +
 +	/*
 +	 * Indicates how deep in a filesystem stack this SB is
@@ -3146,31 +3201,32 @@
  };
  
  /* superblock cache pruning functions */
-@@ -1638,6 +1649,7 @@ struct inode_operations {
+@@ -1653,6 +1664,8 @@ struct inode_operations {
  	void (*truncate_range)(struct inode *, loff_t, loff_t);
  	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start,
  		      u64 len);
-+	struct file *(*open)(struct dentry *, int flags, const struct cred *);
++	struct file *(*open) (struct dentry *, struct file *,
++			      const struct cred *);
  } ____cacheline_aligned;
  
  struct seq_file;
-@@ -2058,6 +2070,7 @@ extern long do_sys_open(int dfd, const c
- extern struct file *filp_open(const char *, int, int);
+@@ -2023,6 +2036,7 @@ extern long do_sys_open(int dfd, const c
+ extern struct file *filp_open(const char *, int, umode_t);
  extern struct file *file_open_root(struct dentry *, struct vfsmount *,
  				   const char *, int);
-+extern struct file *vfs_open(struct path *, int flags, const struct cred *);
++extern struct file *vfs_open(struct path *, struct file *, const struct cred *);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int,
  				 const struct cred *);
  extern int filp_close(struct file *, fl_owner_t id);
 --- a/include/linux/mount.h
 +++ b/include/linux/mount.h
-@@ -100,6 +100,9 @@ extern void mnt_pin(struct vfsmount *mnt
+@@ -66,6 +66,9 @@ extern void mnt_pin(struct vfsmount *mnt
  extern void mnt_unpin(struct vfsmount *mnt);
  extern int __mnt_is_readonly(struct vfsmount *mnt);
  
 +struct path;
 +extern struct vfsmount *clone_private_mount(struct path *path);
 +
- extern struct vfsmount *do_kern_mount(const char *fstype, int flags,
- 				      const char *name, void *data);
- 
+ struct file_system_type;
+ extern struct vfsmount *vfs_kern_mount(struct file_system_type *type,
+ 				      int flags, const char *name,

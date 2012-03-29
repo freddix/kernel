@@ -13,15 +13,15 @@
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
-%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.2
-%define		postver		.12
+%define		basever		3.3
+%define		postver		.0
 %define		rel		1
 
 %if %{with perf}
@@ -57,10 +57,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	364066fa18767ec0ae5f4e4abcf9dc51
+# Source0-md5:	7133f5a2086a7d7ef97abac610c094f5
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	b7be7cbdb2048d96d0ae70f7f495db15
+# Source1-md5:	2bb2c0e17727a401e9b61b1bec9d8b9d
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -72,18 +72,18 @@ Source10:	kernel.make
 #
 # patches
 Patch0:		kernel-modpost.patch
-# https://dev.openwrt.org/export/27940/trunk/target/linux/generic/patches-3.1/100-overlayfs_v11.patch
+# https://dev.openwrt.org/browser/trunk/target/linux/generic/patches-3.3/100-overlayfs_v12.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
 # multiple bugs involved
 Patch3:		kernel-i915-gpu-finish.patch
 # http://ck.kolivas.org/patches/bfs
-Patch100:	3.2-sched-bfs-416.patch
+Patch100:	3.3-sched-bfs-420.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r2-for-3.2.patch
-Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r2-3.2.patch
-Patch112:	0003-block-introduce-the-BFQ-v3r2-I-O-sched-for-3.2.patch
+#Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r2-for-3.2.patch
+#Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r2-3.2.patch
+#Patch112:	0003-block-introduce-the-BFQ-v3r2-I-O-sched-for-3.2.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod
@@ -377,8 +377,10 @@ BuildConfig() {
 %else
 	CONFIG_CGROUP_SCHED=y
 	CONFIG_FAIR_GROUP_SCHED=y
+	CONFIG_CFS_BANDWIDTH=y
 	CONFIG_RT_GROUP_SCHED=y
 	CONFIG_SCHED_AUTOGROUP=y
+	CONFIG_MM_OWNER=y
 %endif
 %if %{with bfq}
 	CONFIG_IOSCHED_BFQ=y
