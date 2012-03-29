@@ -21,7 +21,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.2
-%define		postver		.12
+%define		postver		.13
 %define		rel		1
 
 %if %{with perf}
