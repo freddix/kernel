@@ -21,7 +21,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.2
-%define		postver		.6
+%define		postver		.12
 %define		rel		1
 
 %if %{with perf}
@@ -56,11 +56,11 @@ Release:	%{rel}
 Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
-Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
+Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	364066fa18767ec0ae5f4e4abcf9dc51
 %if "%{postver}" != ".0"
-Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	0aea8fc5e705c5b1ef68697de9379cef
+Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
+# Source1-md5:	b7be7cbdb2048d96d0ae70f7f495db15
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -106,11 +106,11 @@ BuildRequires:	perl-base
 %endif
 Requires(post):	coreutils
 Requires(post):	geninitrd
-Requires(post):	module-init-tools
+Requires(post):	kmod
 Requires:	/sbin/depmod
 Requires:	coreutils
 Requires:	geninitrd
-Requires:	module-init-tools >= 3.16
+Requires:	kmod
 Provides:	%{name}(vermagic) = %{kernel_release}
 Provides:	kernel(ureadahead) = %{kernel_release}
 ExclusiveOS:	Linux
@@ -488,9 +488,6 @@ install %{objdir}/vmlinux $RPM_BUILD_ROOT/boot/vmlinux-%{kernel_release}
 # ghosted initrd
 touch $RPM_BUILD_ROOT%{initrd_dir}/initrd-%{kernel_release}.gz
 
-# /etc/modrobe.d
-install -d $RPM_BUILD_ROOT%{_sysconfdir}/modprobe.d/%{kernel_release}
-
 # /usr/src/linux
 install -d $RPM_BUILD_ROOT%{_kernelsrcdir}/include/generated
 # test if we can hardlink -- %{_builddir} and $RPM_BUILD_ROOT on same partition
@@ -538,11 +535,6 @@ rm -f $RPM_BUILD_ROOT%{_includedir}/{,*/}.*
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%preun
-if [ -x /sbin/new-kernel-pkg ]; then
-	/sbin/new-kernel-pkg --remove %{kernel_release}
-fi
-
 %post
 mv -f /boot/vmlinuz{,.old} 2> /dev/null
 mv -f /boot/vmlinuz%{_alt_kernel}{,.old} 2> /dev/null
@@ -568,12 +560,6 @@ if [ -x /sbin/update-grub -a -f /etc/sysconfig/grub ]; then
 	if [ "$(. /etc/sysconfig/grub; echo ${UPDATE_GRUB:-no})" = "yes" ]; then
 		/sbin/update-grub >/dev/null
 	fi
-fi
-if [ -x /sbin/new-kernel-pkg ]; then
-	/sbin/new-kernel-pkg --initrdfile=%{initrd_dir}/initrd-%{kernel_release}.gz --install %{kernel_release} --banner "Freddix (%{pld_release}) / %{alt_kernel}}"
-fi
-if [ -x /sbin/rc-boot ]; then
-	/sbin/rc-boot 1>&2 || :
 fi
 
 %post vmlinux
@@ -667,8 +653,6 @@ fi
 /lib/modules/%{kernel_release}/kernel/security
 /lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
 /lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
-
-%dir %{_sysconfdir}/modprobe.d/%{kernel_release}
 
 # provided by build
 /lib/modules/%{kernel_release}/modules.order
