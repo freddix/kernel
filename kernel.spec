@@ -13,7 +13,7 @@
 %bcond_with	laptop		# extra power savings
 %bcond_with	pae		# PAE support
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 %bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
@@ -22,7 +22,7 @@
 
 %define		basever		3.3
 %define		postver		.0
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -377,10 +377,8 @@ BuildConfig() {
 %else
 	CONFIG_CGROUP_SCHED=y
 	CONFIG_FAIR_GROUP_SCHED=y
-	CONFIG_CFS_BANDWIDTH=y
 	CONFIG_RT_GROUP_SCHED=y
 	CONFIG_SCHED_AUTOGROUP=y
-	CONFIG_MM_OWNER=y
 %endif
 %if %{with bfq}
 	CONFIG_IOSCHED_BFQ=y
@@ -391,6 +389,7 @@ BuildConfig() {
 %else
 	CONFIG_DEFAULT_CFQ=y
 	CONFIG_IOSCHED_CFQ=y
+	CFQ_GROUP_IOSCHED=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
 EOCONFIG
@@ -639,7 +638,6 @@ fi
 %exclude /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
 %exclude /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/libertas/*_cs.ko*
 %exclude /lib/modules/%{kernel_release}/kernel/drivers/parport/parport_cs.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/tty/serial/serial_cs.ko*
 %exclude /lib/modules/%{kernel_release}/kernel/drivers/pcmcia/[!p]*
 %exclude /lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pd6729.ko*
 %exclude /lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
@@ -702,7 +700,6 @@ fi
 /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
 /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/libertas/*_cs.ko*
 /lib/modules/%{kernel_release}/kernel/drivers/parport/parport_cs.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/tty/serial/serial_cs.ko*
 /lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
 
 %files sound-alsa
