@@ -21,8 +21,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.3
-%define		postver		.0
-%define		rel		2
+%define		postver		.1
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -60,7 +60,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	7133f5a2086a7d7ef97abac610c094f5
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	2bb2c0e17727a401e9b61b1bec9d8b9d
+# Source1-md5:	10771d657c5bf342bcfe66ed06653ecb
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -76,8 +76,6 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# multiple bugs involved
-Patch3:		kernel-i915-gpu-finish.patch
 # http://ck.kolivas.org/patches/bfs
 Patch100:	3.3-sched-bfs-420.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
@@ -270,7 +268,6 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
-%patch3 -p1
 
 %if %{with bfs}
 %patch100 -p1
