@@ -10,18 +10,10 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_with	bfq		# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/3.0.0/README.BFQ
-%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
-%bcond_with	laptop		# extra power savings
-%bcond_with	pae		# PAE support
-%bcond_without	rt		# real time kernel
-
-%bcond_with	latencytop	# add latencytop support
-
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.0
-%define		postver		.17
+%define		postver		.27
 %define		rel		1
 
 %if %{with perf}
@@ -32,17 +24,7 @@
 %unglobal	with_kernel_build
 %endif
 
-%if %{with latencytop}
-%unglobal	with_bfs
-%unglobal	with_bfq
-%unglobal	with_rt
-%endif
-
-%if %{with laptop}
-%define		alt_kernel	laptop%{?with_pae:-pae}
-%else
-%define		alt_kernel	s30x%{?with_pae:-pae}%{?with_latencytop:-ltop}%{?with_rt:-rt}
-%endif
+%define		alt_kernel	s30x-rt
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /lib/modules/%{kernel_release}
@@ -61,7 +43,7 @@ Source0:	http://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	ecf932280e2441bdd992423ef3d55f8f
 %if "%{postver}" != ".0"
 Source1:	http://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	e86da20888dfcd19b94f5d518329ca25
+# Source1-md5:	2fc7f9aee8dc3f42196485b3cbb65e9e
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -76,15 +58,8 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# BFS
-Patch100:	http://ck.kolivas.org/patches/bfs/3.0.0/3.0-sched-bfs-413.patch
-# BFQ
-# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/3.0.0
-Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3-for-3.0.patch
-Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3-3.0.patch
-Patch112:	0003-block-introduce-the-BFQ-v3-I-O-sched-for-3.0.patch
 # http://kernel.org/pub/linux/kernel/projects/rt/3.0
-Patch120:	patch-3.0.14-rt32.patch
+Patch3:		patch-3.0.26-rt45.patch
 #
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
@@ -108,13 +83,12 @@ BuildRequires:	perl-base
 %endif
 Requires(post):	coreutils
 Requires(post):	geninitrd
-Requires(post):	module-init-tools
+Requires(post):	kmod
 Requires:	/sbin/depmod
 Requires:	coreutils
 Requires:	geninitrd
-Requires:	module-init-tools >= 3.16
+Requires:	kmod
 Provides:	%{name}(vermagic) = %{kernel_release}
-Provides:	kernel(ureadahead) = {kernel_release}
 ExclusiveOS:	Linux
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -262,30 +236,13 @@ ln -s %{SOURCE10} Makefile
 cd linux-%{basever}
 
 %if "%{postver}" != ".0"
-xz -dc %{SOURCE1} | patch -p1 -s
+xzcat %{SOURCE1} | patch -p1 -s
 %endif
 
-%if %{with laptop}
-bzcat %{SOURCE102} | patch -p1 -s || exit 1
-%endif
-
-%patch0 -p1 -b .modpost
-%patch1 -p1 -b .overlayfs
-%patch2 -p1 -b .e1000e_mdix
-
-%if %{with bfs}
-%patch100 -p1
-%endif
-
-%if %{with bfq}
-%patch110 -p1
-%patch111 -p1
-%patch112 -p1
-%endif
-
-%if %{with rt}
-%patch120 -p1
-%endif
+%patch0 -p1
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
 
 # Fix EXTRAVERSION in main Makefile
 sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
@@ -322,89 +279,6 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-%if %{with laptop}
-	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=y
-	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=n
-	CONFIG_CPU_FREQ_GOV_ONDEMAND=y
-	CONFIG_CPU_FREQ_TABLE=y
-	CONFIG_CPU_IDLE_GOV_MENU=y
-	CONFIG_HZ=300
-	CONFIG_HZ_1000=n
-	CONFIG_HZ_100=n
-	CONFIG_HZ_250=n
-	CONFIG_HZ_300=y
-	CONFIG_NO_HZ=y
-	CONFIG_SND_AC97_POWER_SAVE=y
-	CONFIG_SND_AC97_POWER_SAVE_DEFAULT=0
-	CONFIG_SND_HDA_POWER_SAVE=y
-	CONFIG_SND_HDA_POWER_SAVE_DEFAULT=0
-	CONFIG_DEBUG_KERNEL=y
-	CONFIG_TIMER_STATS=y
-	CONFIG_TRACING=y
-	CONFIG_CONTEXT_SWITCH_TRACER=y
-	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
-%else
-	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=n
-	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
-	CONFIG_CPU_FREQ_GOV_ONDEMAND=m
-	CONFIG_HZ=1000
-	CONFIG_HZ_1000=y
-	CONFIG_HZ_100=n
-	CONFIG_HZ_250=n
-	CONFIG_HZ_300=n
-	CONFIG_NO_HZ=n
-	CONFIG_SND_AC97_POWER_SAVE=n
-	CONFIG_SND_AC97_POWER_SAVE_DEFAULT=n
-	CONFIG_SND_HDA_POWER_SAVE=n
-	CONFIG_SND_HDA_POWER_SAVE_DEFAULT=n
-	CONFIG_CPU_FREQ_TABLE=m
-	%if %{with latencytop}
-	CONFIG_DEBUG_KERNEL=y
-	%else
-	CONFIG_DEBUG_KERNEL=n
-	CONFIG_FRAME_POINTER=n
-	%endif
-%endif
-%if %{with pae}
-	CONFIG_ARCH_PHYS_ADDR_T_64BIT=y
-	CONFIG_HIGHMEM4G=n
-	CONFIG_HIGHMEM64G=y
-	CONFIG_I2O_EXT_ADAPTEC_DMA64=y
-	CONFIG_PHYS_ADDR_T_64BIT=y
-	CONFIG_X86_PAE=y
-	CONFIG_XEN=n
-%else
-	CONFIG_HIGHMEM4G=y
-	CONFIG_HIGHMEM64G=n
-%endif
-%if %{with bfs}
-	CONFIG_SCHED_BFS=y
-%else
-	CONFIG_CGROUP_SCHED=y
-	CONFIG_FAIR_GROUP_SCHED=y
-	CONFIG_RT_GROUP_SCHED=y
-	CONFIG_SCHED_AUTOGROUP=y
-%endif
-%if %{with bfq}
-	CONFIG_IOSCHED_BFQ=y
-	CONFIG_CGROUP_BFQIO=y
-	CONFIG_DEFAULT_CFQ=n
-	CONFIG_DEFAULT_BFQ=y
-	CONFIG_DEFAULT_IOSCHED="bfq"
-%else
-	CONFIG_DEFAULT_CFQ=y
-	CONFIG_DEFAULT_IOSCHED="cfq"
-%endif
-%if %{with rt}
-	CONFIG_PREEMPT_RT_BASE=y
-	CONFIG_PREEMPT_RT_FULL=y
-	CONFIG_TRANSPARENT_HUGEPAGE=n
-	CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=n
-%else
-	CONFIG_PREEMPT=y
-	CONFIG_PREEMPT_COUNT=y
-	CONFIG_TRANSPARENT_HUGEPAGE=y
-	CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=y
 %endif
 EOCONFIG
 
@@ -503,9 +377,6 @@ install %{objdir}/vmlinux $RPM_BUILD_ROOT/boot/vmlinux-%{kernel_release}
 # ghosted initrd
 touch $RPM_BUILD_ROOT%{initrd_dir}/initrd-%{kernel_release}.gz
 
-# /etc/modrobe.d
-install -d $RPM_BUILD_ROOT%{_sysconfdir}/modprobe.d/%{kernel_release}
-
 # /usr/src/linux
 install -d $RPM_BUILD_ROOT%{_kernelsrcdir}/include/generated
 # test if we can hardlink -- %{_builddir} and $RPM_BUILD_ROOT on same partition
@@ -577,25 +448,6 @@ mv -f %{initrd_dir}/initrd{,.old} 2> /dev/null
 mv -f %{initrd_dir}/initrd%{_alt_kernel}{,.old} 2> /dev/null
 ln -sf initrd-%{kernel_release}.gz %{initrd_dir}/initrd
 ln -sf initrd-%{kernel_release}.gz %{initrd_dir}/initrd%{_alt_kernel}
-
-# update boot loaders when old package files are gone from filesystem
-if [ -x /sbin/update-grub -a -f /etc/sysconfig/grub ]; then
-	if [ "$(. /etc/sysconfig/grub; echo ${UPDATE_GRUB:-no})" = "yes" ]; then
-		/sbin/update-grub >/dev/null
-	fi
-fi
-if [ -x /sbin/new-kernel-pkg ]; then
-	/sbin/new-kernel-pkg --initrdfile=%{initrd_dir}/initrd-%{kernel_release}.gz --install %{kernel_release} --banner "Freddix (%{pld_release}) / %{alt_kernel}}"
-fi
-if [ -x /sbin/rc-boot ]; then
-	/sbin/rc-boot 1>&2 || :
-fi
-
-%post vmlinux
-mv -f /boot/vmlinux{,.old} 2> /dev/null
-mv -f /boot/vmlinux-%{_alt_kernel}{,.old} 2> /dev/null
-ln -sf vmlinux-%{kernel_release} /boot/vmlinux
-ln -sf vmlinux-%{kernel_release} /boot/vmlinux-%{_alt_kernel}
 
 %post drm
 %depmod %{kernel_release}
@@ -682,8 +534,6 @@ fi
 /lib/modules/%{kernel_release}/kernel/security
 /lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
 /lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
-
-%dir %{_sysconfdir}/modprobe.d/%{kernel_release}
 
 # provided by build
 /lib/modules/%{kernel_release}/modules.order
