@@ -14,7 +14,7 @@
 
 %define		basever		3.0
 %define		postver		.27
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -279,7 +279,6 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-%endif
 EOCONFIG
 
 	# prepare kernel-style config file from multiple config files
@@ -289,9 +288,6 @@ EOCONFIG
 %endif
 %ifarch %{ix86}
 	$RPM_SOURCE_DIR/kernel-x86.config \
-%endif
-%if %{with latencytop}
-	$RPM_SOURCE_DIR/kernel-latencytop.config \
 %endif
 	local.config
 }

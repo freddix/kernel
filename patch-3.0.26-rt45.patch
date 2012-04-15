@@ -30683,10 +30683,6 @@ index 4755b98..4566b69b 100644
 diff --git a/localversion-rt b/localversion-rt
 new file mode 100644
 index 0000000..38c40b2
---- /dev/null
-+++ b/localversion-rt
-@@ -0,0 +1 @@
-+-rt45
 diff --git a/mm/Kconfig b/mm/Kconfig
 index 8ca47a5..3c36545 100644
 --- a/mm/Kconfig
