@@ -10,18 +10,15 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_with	laptop		# extra power savings
-%bcond_with	pae		# PAE support
-
-%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
-%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.3
-%define		postver		.1
+%define		postver		.5
 %define		rel		1
 
 %if %{with perf}
@@ -37,11 +34,13 @@
 %unglobal	with_bfq
 %endif
 
-%if %{with laptop}
-%define		alt_kernel	laptop%{?with_pae:-pae}
+%if "%{_target_base_arch}" == "x86_64"
+%define		subname	std64
 %else
-%define		alt_kernel	std%{?with_pae:-pae}%{?with_latencytop:-ltop}
+%define		subname	std
 %endif
+
+%define		alt_kernel	%{subname}%{?with_latencytop:-ltop}
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /lib/modules/%{kernel_release}
@@ -60,7 +59,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	7133f5a2086a7d7ef97abac610c094f5
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	10771d657c5bf342bcfe66ed06653ecb
+# Source1-md5:	d346edca5d3de7052f49996b01cef401
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -79,9 +78,8 @@ Patch2:		kernel-e1000e-control-mdix.patch
 # http://ck.kolivas.org/patches/bfs
 Patch100:	3.3-sched-bfs-420.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-#Patch110:	0001-block-prepare-I-O-context-code-for-BFQ-v3r2-for-3.2.patch
-#Patch111:	0002-block-cgroups-kconfig-build-bits-for-BFQ-v3r2-3.2.patch
-#Patch112:	0003-block-introduce-the-BFQ-v3r2-I-O-sched-for-3.2.patch
+Patch110:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r3-3.3.patch
+Patch111:	0002-block-introduce-the-BFQ-v3r3-I-O-sched-for-3.3.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/sbin/depmod
@@ -261,10 +259,6 @@ cd linux-%{basever}
 xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
-%if %{with laptop}
-bzcat %{SOURCE102} | patch -p1 -s || exit 1
-%endif
-
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
@@ -276,7 +270,6 @@ bzcat %{SOURCE102} | patch -p1 -s || exit 1
 %if %{with bfq}
 %patch110 -p1
 %patch111 -p1
-%patch112 -p1
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -314,79 +307,17 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-%if %{with laptop}
-	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=y
-	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=n
-	CONFIG_CPU_FREQ_GOV_ONDEMAND=y
-	CONFIG_CPU_FREQ_TABLE=y
-	CONFIG_CPU_IDLE_GOV_MENU=y
-	CONFIG_HZ=300
-	CONFIG_HZ_1000=n
-	CONFIG_HZ_100=n
-	CONFIG_HZ_250=n
-	CONFIG_HZ_300=y
-	CONFIG_NO_HZ=y
-	CONFIG_SND_AC97_POWER_SAVE=y
-	CONFIG_SND_AC97_POWER_SAVE_DEFAULT=0
-	CONFIG_SND_HDA_POWER_SAVE=y
-	CONFIG_SND_HDA_POWER_SAVE_DEFAULT=0
-	CONFIG_DEBUG_KERNEL=y
-	CONFIG_TIMER_STATS=y
-	CONFIG_TRACING=y
-	CONFIG_CONTEXT_SWITCH_TRACER=y
-	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
-%else
-	CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=n
-	CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
-	CONFIG_CPU_FREQ_GOV_ONDEMAND=m
-	CONFIG_HZ=1000
-	CONFIG_HZ_1000=y
-	CONFIG_HZ_100=n
-	CONFIG_HZ_250=n
-	CONFIG_HZ_300=n
-	CONFIG_NO_HZ=n
-	CONFIG_SND_AC97_POWER_SAVE=n
-	CONFIG_SND_AC97_POWER_SAVE_DEFAULT=n
-	CONFIG_SND_HDA_POWER_SAVE=n
-	CONFIG_SND_HDA_POWER_SAVE_DEFAULT=n
-	CONFIG_CPU_FREQ_TABLE=m
-	%if %{with latencytop}
-	CONFIG_DEBUG_KERNEL=y
-	%else
-	CONFIG_DEBUG_KERNEL=n
-	CONFIG_FRAME_POINTER=n
-	%endif
-%endif
-%if %{with pae}
-	CONFIG_ARCH_PHYS_ADDR_T_64BIT=y
-	CONFIG_HIGHMEM4G=n
-	CONFIG_HIGHMEM64G=y
-	CONFIG_I2O_EXT_ADAPTEC_DMA64=y
-	CONFIG_PHYS_ADDR_T_64BIT=y
-	CONFIG_X86_PAE=y
-	CONFIG_XEN=n
-%else
-	CONFIG_HIGHMEM4G=y
-	CONFIG_HIGHMEM64G=n
-%endif
 %if %{with bfs}
 	CONFIG_SCHED_BFS=y
-%else
-	CONFIG_CGROUP_SCHED=y
-	CONFIG_FAIR_GROUP_SCHED=y
-	CONFIG_RT_GROUP_SCHED=y
-	CONFIG_SCHED_AUTOGROUP=y
 %endif
 %if %{with bfq}
-	CONFIG_IOSCHED_BFQ=y
-	CONFIG_CGROUP_BFQIO=y
+	CONFIG_CGROUP_BFQIO=n
 	CONFIG_DEFAULT_CFQ=n
 	CONFIG_DEFAULT_BFQ=y
 	CONFIG_DEFAULT_IOSCHED="bfq"
 %else
+	CONFIG_CGROUP_BFQIO=n
 	CONFIG_DEFAULT_CFQ=y
-	CONFIG_IOSCHED_CFQ=y
-	CFQ_GROUP_IOSCHED=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
 EOCONFIG
@@ -398,9 +329,6 @@ EOCONFIG
 %endif
 %ifarch %{ix86}
 	$RPM_SOURCE_DIR/kernel-x86.config \
-%endif
-%if %{with latencytop}
-	$RPM_SOURCE_DIR/kernel-latencytop.config \
 %endif
 	local.config
 }
