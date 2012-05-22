@@ -10,15 +10,15 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 %bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.3
-%define		postver		.5
+%define		basever		3.4
+%define		postver		.0
 %define		rel		1
 
 %if %{with perf}
@@ -56,7 +56,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	7133f5a2086a7d7ef97abac610c094f5
+# Source0-md5:	967f72983655e2479f951195953e8480
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	d346edca5d3de7052f49996b01cef401
@@ -306,7 +306,7 @@ EOF
 BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
-	CONFIG_OVERLAYFS_FS=m
+	CONFIG_OVERLAYFS_FS=y
 %if %{with bfs}
 	CONFIG_SCHED_BFS=y
 %endif
