@@ -88,6 +88,7 @@ AutoReqProv:	no
 BuildRequires:	asciidoc
 BuildRequires:	binutils-devel
 BuildRequires:	elfutils-devel
+BuildRequires:	gtk+-devel
 BuildRequires:	newt-devel
 BuildRequires:	python-devel
 BuildRequires:	rpm-perlprov
@@ -101,11 +102,9 @@ BuildRequires:	net-tools
 BuildRequires:	perl-base
 %endif
 Requires(post):	coreutils
-Requires(post):	geninitrd
 Requires(post):	kmod
 Requires:	/sbin/depmod
 Requires:	coreutils
-Requires:	geninitrd
 Requires:	kmod
 Provides:	%{name}(vermagic) = %{kernel_release}
 Provides:	kernel(ureadahead) = %{kernel_release}
@@ -119,8 +118,6 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 # No ELF objects there to strip (skips processing 27k files)
 %define		_noautostrip	\\(.*%{_kernelsrcdir}/.*\\|.*/vmlinux.*\\)
 %define		_noautochrpath	.*%{_kernelsrcdir}/.*
-
-%define		initrd_dir	/boot
 
 %define		objdir		%{topdir}/%{targetobj}
 %define		srcdir		%{topdir}/linux-%{basever}
@@ -242,6 +239,7 @@ glibc package.
 %package -n perf
 Summary:	Performance analysis tools for Linux
 Group:		Applications/System
+Requires:	gtk+
 
 %description -n perf
 Performance counters for Linux are are a new kernel-based subsystem
@@ -411,9 +409,6 @@ cp -a %{objdir}/System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_release}
 cp -a %{objdir}/arch/%{target_arch_dir}/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_release}
 install %{objdir}/vmlinux $RPM_BUILD_ROOT/boot/vmlinux-%{kernel_release}
 
-# ghosted initrd
-touch $RPM_BUILD_ROOT%{initrd_dir}/initrd-%{kernel_release}.gz
-
 # /usr/src/linux
 install -d $RPM_BUILD_ROOT%{_kernelsrcdir}/include/generated
 # test if we can hardlink -- %{_builddir} and $RPM_BUILD_ROOT on same partition
@@ -473,21 +468,6 @@ ln -sf System.map-%{kernel_release} /boot/System.map%{_alt_kernel}
 
 %depmod %{kernel_release}
 
-%posttrans
-# generate initrd after all dependant modules are installed
-/sbin/geninitrd -f --initrdfs=rom %{initrd_dir}/initrd-%{kernel_release}.gz %{kernel_release}
-mv -f %{initrd_dir}/initrd{,.old} 2> /dev/null
-mv -f %{initrd_dir}/initrd%{_alt_kernel}{,.old} 2> /dev/null
-ln -sf initrd-%{kernel_release}.gz %{initrd_dir}/initrd
-ln -sf initrd-%{kernel_release}.gz %{initrd_dir}/initrd%{_alt_kernel}
-
-# update boot loaders when old package files are gone from filesystem
-if [ -x /sbin/update-grub -a -f /etc/sysconfig/grub ]; then
-	if [ "$(. /etc/sysconfig/grub; echo ${UPDATE_GRUB:-no})" = "yes" ]; then
-		/sbin/update-grub >/dev/null
-	fi
-fi
-
 %post vmlinux
 mv -f /boot/vmlinux{,.old} 2> /dev/null
 mv -f /boot/vmlinux-%{_alt_kernel}{,.old} 2> /dev/null
@@ -543,7 +523,6 @@ fi
 %defattr(644,root,root,755)
 /boot/vmlinuz-%{kernel_release}
 /boot/System.map-%{kernel_release}
-%ghost %{initrd_dir}/initrd-%{kernel_release}.gz
 /lib/firmware/%{kernel_release}
 
 %dir /lib/modules/%{kernel_release}
@@ -760,7 +739,7 @@ fi
 %files -n perf
 %defattr(644,root,root,755)
 %doc linux-%{basever}/tools/perf/Documentation/examples.txt linux-%{basever}/tools/perf/command-list.txt linux-%{basever}/tools/perf/design.txt
-%attr(755,root,root) %{_bindir}/*
+%attr(755,root,root) %{_bindir}/perf
 %attr(755,root,root) %{_libexecdir}/perf-archive
 %attr(755,root,root) %{_libexecdir}/scripts/perl/bin/*
 %attr(755,root,root) %{_libexecdir}/scripts/python/bin/*
