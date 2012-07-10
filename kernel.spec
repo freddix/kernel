@@ -18,7 +18,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.4
-%define		postver		.1
+%define		postver		.4
 %define		rel		1
 
 %if %{with perf}
@@ -35,7 +35,7 @@
 %endif
 
 %if "%{_target_base_arch}" == "x86_64"
-%define		subname	std64
+%define		subname	std_64
 %else
 %define		subname	std
 %endif
@@ -59,7 +59,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	967f72983655e2479f951195953e8480
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	52adc59c547c4c7926686145b9ade5f1
+# Source1-md5:	58e6672d932d74d5e2b6811b9d37d67c
 %endif
 #
 Source3:	kernel-autoconf.h
