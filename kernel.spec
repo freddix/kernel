@@ -10,15 +10,14 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
-%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.4
-%define		postver		.4
+%define		postver		.10
 %define		rel		1
 
 %if %{with perf}
@@ -30,17 +29,10 @@
 %endif
 
 %if %{with latencytop}
-%unglobal	with_bfs
 %unglobal	with_bfq
 %endif
 
-%if "%{_target_base_arch}" == "x86_64"
-%define		subname	std_64
-%else
-%define		subname	std
-%endif
-
-%define		alt_kernel	%{subname}%{?with_latencytop:-ltop}
+%define		alt_kernel	std%{?with_latencytop:-ltop}
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /lib/modules/%{kernel_release}
@@ -59,7 +51,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	967f72983655e2479f951195953e8480
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	58e6672d932d74d5e2b6811b9d37d67c
+# Source1-md5:	5ac016a4a5b47179a0aee0dbadbb2254
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -75,14 +67,12 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# http://ck.kolivas.org/patches/bfs
-Patch100:	3.3-sched-bfs-420.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-Patch110:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r3-3.3.patch
-Patch111:	0002-block-introduce-the-BFQ-v3r3-I-O-sched-for-3.3.patch
+Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v4-3.4.patch
+Patch101:	0002-block-introduce-the-BFQ-v4-I-O-sched-for-3.4.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
-BuildRequires:	/sbin/depmod
+BuildRequires:	/usr/sbin/depmod
 AutoReqProv:	no
 %if %{with perf}
 BuildRequires:	asciidoc
@@ -103,7 +93,7 @@ BuildRequires:	perl-base
 %endif
 Requires(post):	coreutils
 Requires(post):	kmod
-Requires:	/sbin/depmod
+Requires:	/usr/sbin/depmod
 Requires:	coreutils
 Requires:	kmod
 Provides:	%{name}(vermagic) = %{kernel_release}
@@ -261,13 +251,9 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %patch1 -p1
 %patch2 -p1
 
-%if %{with bfs}
-%patch100 -p1
-%endif
-
 %if %{with bfq}
-%patch110 -p1
-%patch111 -p1
+%patch100 -p1
+%patch101 -p1
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -305,9 +291,6 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-%if %{with bfs}
-	CONFIG_SCHED_BFS=y
-%endif
 %if %{with bfq}
 	CONFIG_CGROUP_BFQIO=n
 	CONFIG_DEFAULT_CFQ=n
