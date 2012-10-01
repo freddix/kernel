@@ -10,15 +10,15 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
-%bcond_without	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
+%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.5
-%define		postver		.2
+%define		basever		3.6
+%define		postver		.0
 %define		rel		1
 
 %if %{with perf}
@@ -56,7 +56,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	24153eaaa81dedc9481ada8cd9c3b83d
+# Source0-md5:	1a1760420eac802c541a20ab51a093d1
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	8e9f9cfd5fbd33ac4b265a4d47949edc
@@ -76,10 +76,10 @@ Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
 # http://ck.kolivas.org/patches/bfs
-Patch100:	3.4-sched-bfs-424.patch
+#Patch100:	3.4-sched-bfs-424.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-Patch110:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r4-3.4.patch
-Patch111:	0002-block-introduce-the-BFQ-v3r4-I-O-sched-for-3.4.patch
+#Patch110:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r4-3.4.patch
+#Patch111:	0002-block-introduce-the-BFQ-v3r4-I-O-sched-for-3.4.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	kmod
@@ -251,7 +251,7 @@ xz -dc %{SOURCE1} | patch -p1 -s
 
 %patch0 -p1
 %patch1 -p1
-%patch2 -p1
+#%patch2 -p1
 
 %if %{with bfs}
 %patch100 -p1
