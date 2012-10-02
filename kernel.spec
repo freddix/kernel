@@ -11,7 +11,6 @@
 %bcond_with	uheaders	# sanitised kernel headers
 
 %bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
-%bcond_with	bfs		# http://ck.kolivas.org/patches/bfs/sched-BFS.txt
 
 %bcond_with	latencytop	# add latencytop support
 
@@ -19,7 +18,7 @@
 
 %define		basever		3.6
 %define		postver		.0
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -34,16 +33,10 @@
 %unglobal	with_bfq
 %endif
 
-%if "%{_target_base_arch}" == "x86_64"
-%define		subname	std_64
-%else
-%define		subname	std
-%endif
-
-%define		alt_kernel	%{subname}%{?with_latencytop:-ltop}
+%define		alt_kernel	std%{?with_latencytop:-ltop}
 
 # kernel release (used in filesystem and eventually in uname -r)
-# modules will be looked from /lib/modules/%{kernel_release}
+# modules will be looked from /usr/lib/modules/%{kernel_release}
 # localversion is just that without version for "> localversion"
 %define		localversion	%{rel}
 %define		kernel_release	%{version}%{_alt_kernel}-%{localversion}
@@ -75,14 +68,12 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# http://ck.kolivas.org/patches/bfs
-#Patch100:	3.4-sched-bfs-424.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-#Patch110:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r4-3.4.patch
-#Patch111:	0002-block-introduce-the-BFQ-v3r4-I-O-sched-for-3.4.patch
+#Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r4-3.4.patch
+#Patch101:	0002-block-introduce-the-BFQ-v3r4-I-O-sched-for-3.4.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
-BuildRequires:	kmod
+BuildRequires:	/usr/sbin/depmod
 AutoReqProv:	no
 %if %{with perf}
 BuildRequires:	asciidoc
@@ -97,7 +88,6 @@ BuildRequires:	slang-devel
 BuildRequires:	xmlto
 %endif
 %if %{with kernel_build}
-# for hostname command
 BuildRequires:	inetutils-hostname
 BuildRequires:	perl-base
 %endif
@@ -217,7 +207,7 @@ This is the documentation for the Linux kernel, as found in
 Summary:	Sanitised kernel headers
 Group:		Development
 AutoReqProv:	no
-Requires(pre):	fileutils
+Requires(pre):	coreutils
 Provides:	alsa-driver-devel
 Provides:	glibc-kernel-headers = %{epoch}:%{version}-%{release}
 
@@ -253,13 +243,9 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %patch1 -p1
 #%patch2 -p1
 
-%if %{with bfs}
-%patch100 -p1
-%endif
-
 %if %{with bfq}
-%patch110 -p1
-%patch111 -p1
+%patch100 -p1
+%patch101 -p1
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -268,8 +254,9 @@ sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
 # cleanup backups after patching
 find '(' -name '*~' -o -name '*.orig' -o -name '.gitignore' ')' -print0 | xargs -0 -r -l512 rm -f
 
-%build
+echo "#!/usr/bin/sh" > scripts/depmod.sh
 
+%build
 %if %{with perf}
 %{__make} -C linux-%{basever}/tools/perf	\
 	%{?with_verbose:V=1}			\
@@ -297,9 +284,6 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-%if %{with bfs}
-	CONFIG_SCHED_BFS=y
-%endif
 %if %{with bfq}
 	CONFIG_CGROUP_BFQIO=n
 	CONFIG_DEFAULT_CFQ=n
@@ -367,31 +351,34 @@ cd linux-%{basever}/tools/perf
 	-C %{objdir} \
 	%{?with_verbose:V=1} \
 	DEPMOD=%{DepMod} \
-	INSTALL_MOD_PATH=$RPM_BUILD_ROOT \
-	INSTALL_FW_PATH=$RPM_BUILD_ROOT/lib/firmware/%{kernel_release} \
+	INSTALL_MOD_PATH=$RPM_BUILD_ROOT%{_prefix} \
+	INSTALL_FW_PATH=$RPM_BUILD_ROOT%{_prefix}/lib/firmware/%{kernel_release} \
 	KERNELRELEASE=%{kernel_release}
 
-touch $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/modules.dep
+# depmod.sh is too clever
+/usr/sbin/depmod -aeb $RPM_BUILD_ROOT -F %{objdir}/System.map %{kernel_release}
 
-install -d $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/misc
+touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/modules.dep
+
+install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/misc
 
 # create directories which may be missing, to simplyfy %files
-install -d $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/kernel/{arch,sound,mm}
+install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/kernel/{arch,sound,mm}
 
 # rpm obeys filelinkto checks for ghosted symlinks, convert to files
-rm -f $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/{build,source}
-touch $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/{build,source}
+rm -f $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
+touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
 
 # no point embed content for %ghost files. empty them
 for a in \
-    	dep{,.bin} \
+	dep{,.bin} \
 	alias{,.bin} \
 	symbols{,.bin} \
 	devname	\
 	softdep	\
 ; do
-	test -f $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/modules.$a
-	> $RPM_BUILD_ROOT/lib/modules/%{kernel_release}/modules.$a
+	test -f $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/modules.$a
+	> $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/modules.$a
 done
 
 # /boot
@@ -496,12 +483,12 @@ if [ "$1" = "0" ]; then
 fi
 
 %triggerin module-build -- %{name} = %{epoch}:%{version}-%{release}
-ln -sfn %{_kernelsrcdir} /lib/modules/%{kernel_release}/build
-ln -sfn %{_kernelsrcdir} /lib/modules/%{kernel_release}/source
+ln -sfn %{_kernelsrcdir} %{_prefix}/lib/modules/%{kernel_release}/build
+ln -sfn %{_kernelsrcdir} %{_prefix}/lib/modules/%{kernel_release}/source
 
 %triggerun module-build -- %{name} = %{epoch}:%{version}-%{release}
 if [ "$1" = 0 ]; then
-	rm -f /lib/modules/%{kernel_release}/{build,source}
+	rm -f %{_prefix}/lib/modules/%{kernel_release}/{build,source}
 fi
 
 %pretrans -n linux-libc-headers
@@ -514,58 +501,54 @@ fi
 %defattr(644,root,root,755)
 /boot/vmlinuz-%{kernel_release}
 /boot/System.map-%{kernel_release}
-/lib/firmware/%{kernel_release}
+%{_prefix}/lib/firmware/%{kernel_release}
 
-%dir /lib/modules/%{kernel_release}
-%dir /lib/modules/%{kernel_release}/kernel
-%dir /lib/modules/%{kernel_release}/kernel/sound
-%dir /lib/modules/%{kernel_release}/misc
+%dir %{_prefix}/lib/modules/%{kernel_release}
+%dir %{_prefix}/lib/modules/%{kernel_release}/kernel
+%dir %{_prefix}/lib/modules/%{kernel_release}/kernel/sound
+%dir %{_prefix}/lib/modules/%{kernel_release}/misc
 
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/gpu
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/media/video/cx88/cx88-alsa.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/media/video/em28xx/em28xx-alsa.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/media/video/saa7134/saa7134-alsa.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/net/wireless/libertas/*_cs.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/parport/parport_cs.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/pcmcia/[!p]*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pd6729.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/gpu
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/em28xx/em28xx-alsa.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/[!p]*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pd6729.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
 
-/lib/modules/%{kernel_release}/kernel/arch
-/lib/modules/%{kernel_release}/kernel/crypto
-/lib/modules/%{kernel_release}/kernel/drivers
-/lib/modules/%{kernel_release}/kernel/fs
-/lib/modules/%{kernel_release}/kernel/kernel
-/lib/modules/%{kernel_release}/kernel/lib
-/lib/modules/%{kernel_release}/kernel/mm
-/lib/modules/%{kernel_release}/kernel/net
-/lib/modules/%{kernel_release}/kernel/security
-/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
-/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/arch
+%{_prefix}/lib/modules/%{kernel_release}/kernel/crypto
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers
+%{_prefix}/lib/modules/%{kernel_release}/kernel/fs
+%{_prefix}/lib/modules/%{kernel_release}/kernel/kernel
+%{_prefix}/lib/modules/%{kernel_release}/kernel/lib
+%{_prefix}/lib/modules/%{kernel_release}/kernel/mm
+%{_prefix}/lib/modules/%{kernel_release}/kernel/net
+%{_prefix}/lib/modules/%{kernel_release}/kernel/security
+%{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
 
 # provided by build
-/lib/modules/%{kernel_release}/modules.order
-/lib/modules/%{kernel_release}/modules.builtin*
+%{_prefix}/lib/modules/%{kernel_release}/modules.order
+%{_prefix}/lib/modules/%{kernel_release}/modules.builtin*
 
 # rest modules.* are ghost (regenerated by post depmod -a invocation)
-%ghost /lib/modules/%{kernel_release}/modules.alias
-%ghost /lib/modules/%{kernel_release}/modules.alias.bin
-%ghost /lib/modules/%{kernel_release}/modules.dep
-%ghost /lib/modules/%{kernel_release}/modules.dep.bin
-%ghost /lib/modules/%{kernel_release}/modules.devname
-%ghost /lib/modules/%{kernel_release}/modules.softdep
-%ghost /lib/modules/%{kernel_release}/modules.symbols
-%ghost /lib/modules/%{kernel_release}/modules.symbols.bin
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.alias
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.alias.bin
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.dep
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.dep.bin
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.devname
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.softdep
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.symbols
+%ghost %{_prefix}/lib/modules/%{kernel_release}/modules.symbols.bin
 
 # symlinks pointing to kernelsrcdir
-%ghost /lib/modules/%{kernel_release}/build
-%ghost /lib/modules/%{kernel_release}/source
+%ghost %{_prefix}/lib/modules/%{kernel_release}/build
+%ghost %{_prefix}/lib/modules/%{kernel_release}/source
 
 %files vmlinux
 %defattr(644,root,root,755)
@@ -573,31 +556,27 @@ fi
 
 %files drm
 %defattr(644,root,root,755)
-/lib/modules/%{kernel_release}/kernel/drivers/gpu
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/gpu
 
 %files pcmcia
 %defattr(644,root,root,755)
-/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/*ko*
-/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
-%exclude /lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pcmcia*ko*
-/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
-/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/libertas/*_cs.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/parport/parport_cs.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/*ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pcmcia*ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
 
 %files sound-alsa
 %defattr(644,root,root,755)
-/lib/modules/%{kernel_release}/kernel/sound
-%exclude %dir /lib/modules/%{kernel_release}/kernel/sound
-%exclude /lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
-%exclude /lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/media/video/cx88/cx88-alsa.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/media/video/em28xx/em28xx-alsa.ko*
-/lib/modules/%{kernel_release}/kernel/drivers/media/video/saa7134/saa7134-alsa.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/sound
+%exclude %dir %{_prefix}/lib/modules/%{kernel_release}/kernel/sound
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
+%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/em28xx/em28xx-alsa.ko*
 
 %files headers -f files.headers_exclude_kbuild
 %defattr(644,root,root,755)
