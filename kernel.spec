@@ -10,15 +10,15 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
 
-%bcond_with	latencytop	# add latencytop support
+%bcond_with	rt		# build RT kernel
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.6
-%define		postver		.0
-%define		rel		3
+%define		postver		.3
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -28,12 +28,7 @@
 %unglobal	with_kernel_build
 %endif
 
-%if %{with latencytop}
-%unglobal	with_bfs
-%unglobal	with_bfq
-%endif
-
-%define		alt_kernel	std%{?with_latencytop:-ltop}
+%define		alt_kernel	%{!?with_rt:std}%{?with_rt:rt}
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /usr/lib/modules/%{kernel_release}
@@ -52,7 +47,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1a1760420eac802c541a20ab51a093d1
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	8e9f9cfd5fbd33ac4b265a4d47949edc
+# Source1-md5:	96701113d37ef4f9b785206ab8bcc71e
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -61,16 +56,17 @@ Source6:	kernel-config.awk
 Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
+# RT
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.1-rt1.patch.xz
+# Source100-md5:	c690bea2beff049b22133796313e3a39
 #
 # patches
 Patch0:		kernel-modpost.patch
-# https://dev.openwrt.org/browser/trunk/target/linux/generic/patches-3.3/100-overlayfs_v12.patch
+# based on http://livenet.selfip.com/ftp/debian/overlayfs/
 Patch1:		kernel-overlayfs.patch
-# https://bugzilla.kernel.org/show_bug.cgi?id=11998
-Patch2:		kernel-e1000e-control-mdix.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-#Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v3r4-3.4.patch
-#Patch101:	0002-block-introduce-the-BFQ-v3r4-I-O-sched-for-3.4.patch
+Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v5-3.6.patch
+Patch101:	0002-block-introduce-the-BFQ-v5-I-O-sched-for-3.6.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -78,6 +74,7 @@ AutoReqProv:	no
 %if %{with perf}
 BuildRequires:	asciidoc
 BuildRequires:	binutils-devel
+BuildRequires:	docbook-dtd45-xml
 BuildRequires:	elfutils-devel
 BuildRequires:	gtk+-devel
 BuildRequires:	newt-devel
@@ -241,11 +238,14 @@ xz -dc %{SOURCE1} | patch -p1 -s
 
 %patch0 -p1
 %patch1 -p1
-#%patch2 -p1
 
 %if %{with bfq}
 %patch100 -p1
 %patch101 -p1
+%endif
+
+%if %{with rt}
+xz -dc %{SOURCE100} | patch -p1 -s
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -284,13 +284,16 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
+%if %{with rt}
+	CONFIG_PREEMPT_RT_FULL=y
+%endif
 %if %{with bfq}
-	CONFIG_CGROUP_BFQIO=n
-	CONFIG_DEFAULT_CFQ=n
+	CONFIG_CGROUP_BFQIO=y
 	CONFIG_DEFAULT_BFQ=y
+	CONFIG_DEFAULT_CFQ=n
 	CONFIG_DEFAULT_IOSCHED="bfq"
+	CONFIG_IOSCHED_BFQ=y
 %else
-	CONFIG_CGROUP_BFQIO=n
 	CONFIG_DEFAULT_CFQ=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
