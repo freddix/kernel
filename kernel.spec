@@ -10,14 +10,14 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
+%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 
 %bcond_with	rt		# build RT kernel
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.6
-%define		postver		.5
+%define		postver		.6
 %define		rel		1
 
 %if %{with perf}
@@ -47,7 +47,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1a1760420eac802c541a20ab51a093d1
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	6ad8ceebb9b5c1bf69a0c07ef7cc81f2
+# Source1-md5:	11d6d8749d4612a77f43f0531c0f2824
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -57,8 +57,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.1-rt1.patch.xz
-# Source100-md5:	c690bea2beff049b22133796313e3a39
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.5-rt15.patch.xz
+# Source100-md5:	ce0c8f15d0a6e3bc13f3341ec58867fa
 #
 # patches
 Patch0:		kernel-modpost.patch
