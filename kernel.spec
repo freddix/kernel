@@ -11,14 +11,13 @@
 %bcond_with	uheaders	# sanitised kernel headers
 
 %bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
-
 %bcond_with	rt		# build RT kernel
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.6
 %define		postver		.7
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -57,8 +56,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.5-rt15.patch.xz
-# Source100-md5:	ce0c8f15d0a6e3bc13f3341ec58867fa
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.6-rt17.patch.xz
+# Source100-md5:	20cd3b6ed53047a633d1e2b1ba32973e
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -67,6 +66,7 @@ Patch1:		kernel-overlayfs.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
 Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v5-3.6.patch
 Patch101:	0002-block-introduce-the-BFQ-v5-I-O-sched-for-3.6.patch
+# http://ck.kolivas.org/patches/3.0/3.6/3.6-ck1/patches/
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -246,6 +246,7 @@ xz -dc %{SOURCE1} | patch -p1 -s
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
+%{__rm} localversion-rt
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -285,6 +286,11 @@ BuildConfig() {
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
 %if %{with rt}
+	CONFIG_PREEMPT_RT_BASE=y
+	CONFIG_HAVE_PREEMPT_LAZY=y
+	CONFIG_PREEMPT_LAZY=y
+	CONFIG_PREEMPT__LL=n
+	CONFIG_PREEMPT_RTB=n
 	CONFIG_PREEMPT_RT_FULL=y
 %endif
 %if %{with bfq}
