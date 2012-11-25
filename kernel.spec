@@ -12,6 +12,7 @@
 
 %bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 %bcond_with	rt		# build RT kernel
+%bcond_with	stats		# enable infrastructure required for bootchart, powertop, etc.
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
@@ -27,7 +28,7 @@
 %unglobal	with_kernel_build
 %endif
 
-%define		alt_kernel	%{!?with_rt:std}%{?with_rt:rt}
+%define		alt_kernel	%{!?with_rt:std}%{?with_rt:rt}%{?with_stats:_stats}
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /usr/lib/modules/%{kernel_release}
@@ -302,6 +303,29 @@ BuildConfig() {
 %else
 	CONFIG_DEFAULT_CFQ=y
 	CONFIG_DEFAULT_IOSCHED="cfq"
+%endif
+%if %{with stats}
+	CONFIG_DEBUG_KERNEL=y
+	CONFIG_SCHED_DEBUG=y
+	CONFIG_SCHEDSTATS=y
+	CONFIG_TIMER_STATS=y
+	CONFIG_DEBUG_PREEMPT=y
+	CONFIG_DEBUG_RODATA=y
+	CONFIG_DEBUG_RODATA_TEST=y
+	CONFIG_STACKTRACE=y
+	CONFIG_NOP_TRACER=y
+	CONFIG_RING_BUFFER=y
+	CONFIG_EVENT_TRACING=y
+	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
+	CONFIG_CONTEXT_SWITCH_TRACER=y
+	CONFIG_TRACING=y
+	CONFIG_FTRACE=y
+	CONFIG_ENABLE_DEFAULT_TRACERS=y
+	CONFIG_BRANCH_PROFILE_NONE=y
+	CONFIG_BINARY_PRINTF=y
+%else
+	CONFIG_DEBUG_KERNEL=n
+	CONFIG_BINARY_PRINTF=n
 %endif
 EOCONFIG
 
