@@ -17,8 +17,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.6
-%define		postver		.7
-%define		rel		2
+%define		postver		.8
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -47,7 +47,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1a1760420eac802c541a20ab51a093d1
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	134936c362d8812b5cafcf3c67afdce0
+# Source1-md5:	f248294551c34753c5c019c8d513280c
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -57,8 +57,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.6-rt17.patch.xz
-# Source100-md5:	20cd3b6ed53047a633d1e2b1ba32973e
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.7-rt18.patch.xz
+# Source100-md5:	01f97c0630de43763699d580f48e1c74
 #
 # patches
 Patch0:		kernel-modpost.patch
