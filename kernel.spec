@@ -10,6 +10,7 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
+%bcond_with	bfs		# BFS by C.Kolivas
 %bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 %bcond_with	rt		# build RT kernel
 %bcond_with	stats		# enable infrastructure required for bootchart, powertop, etc.
@@ -17,7 +18,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.6
-%define		postver		.9
+%define		postver		.10
 %define		rel		1
 
 %if %{with perf}
@@ -28,7 +29,15 @@
 %unglobal	with_kernel_build
 %endif
 
-%define		alt_kernel	%{!?with_rt:std}%{?with_rt:rt}%{?with_stats:_stats}
+%if %{with rt}
+%define		alt_kernel	rt%{?with_stats:_stats}
+%endif
+%if %{with bfs}
+%define		alt_kernel	bfs%{?with_stats:_stats}
+%endif
+%if !%{with rt} && !%{with bfs}
+%define		alt_kernel	std%{?with_stats:_stats}
+%endif
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /usr/lib/modules/%{kernel_release}
@@ -47,7 +56,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1a1760420eac802c541a20ab51a093d1
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	a7c656034599f90dcbc50895b69022aa
+# Source1-md5:	406a52f90a2ddc78a3ecdf4fe46e7cf7
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -57,8 +66,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.8-rt19.patch.xz
-# Source100-md5:	01f97c0630de43763699d580f48e1c74
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.10-rt22.patch.xz
+# Source100-md5:	7dc95a7cf92335b9a2ed12208b9a1b15
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -68,6 +77,8 @@ Patch1:		kernel-overlayfs.patch
 Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v5-3.6.patch
 Patch101:	0002-block-introduce-the-BFQ-v5-I-O-sched-for-3.6.patch
 # http://ck.kolivas.org/patches/3.0/3.6/3.6-ck1/patches/
+Patch110:	http://ck.kolivas.org/patches/3.0/3.6/3.6-ck1/patches/3.5-sched-bfs-425.patch
+#
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -245,6 +256,10 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %patch101 -p1
 %endif
 
+%if %{with bfs}
+%patch110 -p1
+%endif
+
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
 %{__rm} localversion-rt
@@ -293,6 +308,9 @@ BuildConfig() {
 	CONFIG_PREEMPT__LL=n
 	CONFIG_PREEMPT_RTB=n
 	CONFIG_PREEMPT_RT_FULL=y
+%endif
+%if %{with bfs}
+	CONFIG_SCHED_BFS=y
 %endif
 %if %{with bfq}
 	CONFIG_CGROUP_BFQIO=y
