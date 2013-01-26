@@ -66,8 +66,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.10-rt22.patch.xz
-# Source100-md5:	7dc95a7cf92335b9a2ed12208b9a1b15
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.11-rt25.patch.xz
+# Source100-md5:	0be405891c7fb02b0026d4143f2207da
 #
 # patches
 Patch0:		kernel-modpost.patch
