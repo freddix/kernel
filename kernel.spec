@@ -18,7 +18,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.7
-%define		postver		.5
+%define		postver		.6
 %define		rel		1
 
 %if %{with perf}
@@ -56,7 +56,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	21223369d682bcf44bcdfe1521095983
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	c100b62e571bfb80e8c290e811c0963c
+# Source1-md5:	ec61c44f37585a768d41c0439101ef9c
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -89,6 +89,7 @@ BuildRequires:	binutils-devel
 BuildRequires:	docbook-dtd45-xml
 BuildRequires:	elfutils-devel
 BuildRequires:	gtk+-devel
+BuildRequires:	libunwind-devel
 BuildRequires:	newt-devel
 BuildRequires:	python-devel
 BuildRequires:	rpm-perlprov
