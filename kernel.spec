@@ -10,9 +10,8 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_without	bfq		# BFQ (Budget Fair Queueing) scheduler
-
-%bcond_with	latencytop	# add latencytop support
+%bcond_with	rt		# build RT kernel
+%bcond_with	stats		# enable infrastructure required for bootchart, powertop, etc.
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
@@ -28,11 +27,15 @@
 %unglobal	with_kernel_build
 %endif
 
-%if %{with latencytop}
-%unglobal	with_bfq
+%if %{with rt}
+%define		alt_kernel	rt%{?with_stats:_stats}
 %endif
-
-%define		alt_kernel	std%{?with_latencytop:-ltop}
+%if %{with bfs}
+%define		alt_kernel	bfs%{?with_stats:_stats}
+%endif
+%if !%{with rt} && !%{with bfs}
+%define		alt_kernel	std%{?with_stats:_stats}
+%endif
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /usr/lib/modules/%{kernel_release}
@@ -60,6 +63,9 @@ Source6:	kernel-config.awk
 Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
+# RT
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.4/patch-3.4.30-rt43.patch.xz
+# Source100-md5:	7cd9f16e7e6a2772b3bde5e89e3e1ad9
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -67,9 +73,6 @@ Patch0:		kernel-modpost.patch
 Patch1:		kernel-overlayfs.patch
 # https://bugzilla.kernel.org/show_bug.cgi?id=11998
 Patch2:		kernel-e1000e-control-mdix.patch
-# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v4-3.4.patch
-Patch101:	0002-block-introduce-the-BFQ-v4-I-O-sched-for-3.4.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -77,6 +80,7 @@ AutoReqProv:	no
 %if %{with perf}
 BuildRequires:	asciidoc
 BuildRequires:	binutils-devel
+BuildRequires:	docbook-dtd45-xml
 BuildRequires:	elfutils-devel
 BuildRequires:	gtk+-devel
 BuildRequires:	newt-devel
@@ -206,7 +210,7 @@ This is the documentation for the Linux kernel, as found in
 Summary:	Sanitised kernel headers
 Group:		Development
 AutoReqProv:	no
-Requires(pre):	fileutils
+Requires(pre):	coreutils
 Provides:	alsa-driver-devel
 Provides:	glibc-kernel-headers = %{epoch}:%{version}-%{release}
 
@@ -242,9 +246,9 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %patch1 -p1
 %patch2 -p1
 
-%if %{with bfq}
-%patch100 -p1
-%patch101 -p1
+%if %{with rt}
+xz -dc %{SOURCE100} | patch -p1 -s
+%{__rm} localversion-rt
 %endif
 
 # Fix EXTRAVERSION in main Makefile
@@ -253,8 +257,9 @@ sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
 # cleanup backups after patching
 find '(' -name '*~' -o -name '*.orig' -o -name '.gitignore' ')' -print0 | xargs -0 -r -l512 rm -f
 
-%build
+echo "#!/usr/bin/sh" > scripts/depmod.sh
 
+%build
 %if %{with perf}
 %{__make} -C linux-%{basever}/tools/perf	\
 	%{?with_verbose:V=1}			\
@@ -282,15 +287,36 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-%if %{with bfq}
-	CONFIG_CGROUP_BFQIO=n
-	CONFIG_DEFAULT_CFQ=n
-	CONFIG_DEFAULT_BFQ=y
-	CONFIG_DEFAULT_IOSCHED="bfq"
+%if %{with rt}
+	CONFIG_PREEMPT_RT_BASE=y
+	CONFIG_HAVE_PREEMPT_LAZY=y
+	CONFIG_PREEMPT_LAZY=y
+	CONFIG_PREEMPT__LL=n
+	CONFIG_PREEMPT_RTB=n
+	CONFIG_PREEMPT_RT_FULL=y
+%endif
+%if %{with stats}
+	CONFIG_BINARY_PRINTF=y
+	CONFIG_BRANCH_PROFILE_NONE=y
+	CONFIG_CONTEXT_SWITCH_TRACER=y
+	CONFIG_DEBUG_KERNEL=y
+	CONFIG_DEBUG_RODATA=y
+	CONFIG_ENABLE_DEFAULT_TRACERS=y
+	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
+	CONFIG_EVENT_TRACING=y
+	CONFIG_FTRACE=y
+	CONFIG_HAVE_DEBUG_KMEMLEAK=y
+	CONFIG_NOP_TRACER=y
+	CONFIG_RING_BUFFER=y
+	CONFIG_SCHEDSTATS=y
+	CONFIG_SCHED_DEBUG=y
+	CONFIG_STACKTRACE=y
+	CONFIG_TIMER_STATS=y
+	CONFIG_TRACING=y
 %else
-	CONFIG_CGROUP_BFQIO=n
-	CONFIG_DEFAULT_CFQ=y
-	CONFIG_DEFAULT_IOSCHED="cfq"
+	CONFIG_DEBUG_KERNEL=n
+	CONFIG_BINARY_PRINTF=n
+	CONFIG_FTRACE=n
 %endif
 EOCONFIG
 
@@ -394,13 +420,17 @@ if cp -al %{srcdir}/COPYING $RPM_BUILD_ROOT/COPYING 2>/dev/null; then
 fi
 
 cp -a$l %{srcdir}/* $RPM_BUILD_ROOT%{_kernelsrcdir}
-cp -a %{objdir}/Module.symvers $RPM_BUILD_ROOT%{_kernelsrcdir}/Module.symvers-dist
-cp -aL %{objdir}/.config $RPM_BUILD_ROOT%{_kernelsrcdir}/config-dist
-cp -a %{objdir}/include/generated $RPM_BUILD_ROOT%{_kernelsrcdir}/include
-mv $RPM_BUILD_ROOT%{_kernelsrcdir}/include/generated/autoconf{,-dist}.h
-cp -a %{objdir}/include/linux/version.h $RPM_BUILD_ROOT%{_kernelsrcdir}/include/linux
-cp -a %{SOURCE3} $RPM_BUILD_ROOT%{_kernelsrcdir}/include/generated/autoconf.h
-cp -a %{SOURCE4} $RPM_BUILD_ROOT%{_kernelsrcdir}/include/linux/config.h
+cp -a %{objdir}/Module.symvers $RPM_BUILD_ROOT%{_kernelsrcdir}
+cp -aL %{objdir}/.config $RPM_BUILD_ROOT%{_kernelsrcdir}
+cp -a %{objdir}/include $RPM_BUILD_ROOT%{_kernelsrcdir}
+# copy arch/x86/include/generated
+for dir in $(cd %{objdir} && find arch -name generated -type d); do
+cp -a %{objdir}/$dir $RPM_BUILD_ROOT%{_kernelsrcdir}/$dir
+find $RPM_BUILD_ROOT%{_kernelsrcdir}/$dir -name '.*.cmd' -exec rm "{}" ";"
+done
+
+# disable this here, causes a lot of build-time problems and our rpm-build disables it anyway
+%{__sed} -i -e 's|\(CONSTIFY_PLUGIN.*:=.*\)|# \1|' $RPM_BUILD_ROOT%{_kernelsrcdir}/Makefile
 
 # collect module-build files and directories
 # Usage: kernel-module-build.pl $rpmdir $fileoutdir
@@ -409,14 +439,19 @@ cd $RPM_BUILD_ROOT%{_kernelsrcdir}
 %{__perl} %{topdir}/kernel-module-build.pl %{_kernelsrcdir} $fileoutdir
 cd -
 
+%if %{with doc}
 # move to %{_docdir} so we wouldn't depend on any kernel package for dirs
 install -d $RPM_BUILD_ROOT%{_docdir}
 mv $RPM_BUILD_ROOT{%{_kernelsrcdir}/Documentation,%{_docdir}/%{name}-%{version}}
 
-rm -f $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/dontdiff
-rm -f $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/Makefile
-rm -f $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/Makefile
-rm -f $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/*/Makefile
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/dontdiff
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/Makefile
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/Makefile
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/*/Makefile
+%else
+%{__rm} -r $RPM_BUILD_ROOT%{_kernelsrcdir}/Documentation
+%endif
+
 %endif
 
 %if %{with uheaders}
@@ -592,8 +627,8 @@ fi
 %dir %{_kernelsrcdir}/security
 %dir %{_kernelsrcdir}/security/selinux
 %{_kernelsrcdir}/security/selinux/include
-%{_kernelsrcdir}/config-dist
-%{_kernelsrcdir}/Module.symvers-dist
+%{_kernelsrcdir}/.config
+%{_kernelsrcdir}/Module.symvers
 
 %files module-build -f files.mb_include_modulebuild_and_dirs
 %defattr(644,root,root,755)
