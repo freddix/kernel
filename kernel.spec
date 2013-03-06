@@ -18,7 +18,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.8
-%define		postver		.1
+%define		postver		.2
 %define		rel		1
 
 %if %{with perf}
@@ -56,7 +56,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1c738edfc54e7c65faeb90c436104e2f
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	50a68679086c346dddb34dedccfae7ee
+# Source1-md5:	e282fcff76e975e121e0636018e31a56
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -332,7 +332,6 @@ BuildConfig() {
 	CONFIG_ENABLE_DEFAULT_TRACERS=y
 	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
 	CONFIG_EVENT_TRACING=y
-	CONFIG_FTRACE=y
 	CONFIG_HAVE_DEBUG_KMEMLEAK=y
 	CONFIG_NOP_TRACER=y
 	CONFIG_RING_BUFFER=y
@@ -342,8 +341,8 @@ BuildConfig() {
 	CONFIG_TIMER_STATS=y
 	CONFIG_TRACING=y
 %else
-	CONFIG_DEBUG_KERNEL=n
 	CONFIG_BINARY_PRINTF=n
+	CONFIG_DEBUG_KERNEL=n
 %endif
 EOCONFIG
 
