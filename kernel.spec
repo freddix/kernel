@@ -74,10 +74,10 @@ Patch0:		kernel-modpost.patch
 # based on http://livenet.selfip.com/ftp/debian/overlayfs/
 Patch1:		kernel-overlayfs.patch
 # http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v5r1-3.7.patch
-Patch101:	0002-block-introduce-the-BFQ-v5r1-I-O-sched-for-3.7.patch
-# http://ck.kolivas.org/patches/bfs/3.0/3.7
-Patch110:	3.7-sched-bfs-426.patch
+Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v6-3.8.patch
+Patch101:	0002-block-introduce-the-BFQ-v6-I-O-sched-for-3.8.patch
+# http://ck.kolivas.org/patches/bfs/3.0/3.8
+Patch110:	3.8-sched-bfs-428.patch
 #
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
