@@ -66,8 +66,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-#Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.6/patch-3.6.10-rt22.patch.xz
-# Source100-md5:	7dc95a7cf92335b9a2ed12208b9a1b15
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.8/patch-3.8.4-rt1.patch.xz
+# Source100-md5:	1a971ecf58d28ab69c17a73551010abc
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -302,13 +302,18 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
+	CONFIG_PREEMPT=y
 %if %{with rt}
-	CONFIG_PREEMPT_RT_BASE=y
 	CONFIG_HAVE_PREEMPT_LAZY=y
 	CONFIG_PREEMPT_LAZY=y
-	CONFIG_PREEMPT__LL=n
 	CONFIG_PREEMPT_RTB=n
+	CONFIG_PREEMPT_RT_BASE=y
 	CONFIG_PREEMPT_RT_FULL=y
+	CONFIG_PREEMPT__LL=n
+	CONFIG_RWSEM_GENERIC_SPINLOCK=y
+	CONFIG_RWSEM_XCHGADD_ALGORITHM=n
+%else
+	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 %endif
 %if %{with bfs}
 	CONFIG_SCHED_BFS=y
