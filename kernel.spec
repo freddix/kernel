@@ -16,7 +16,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.4
-%define		postver		.32
+%define		postver		.37
 %define		rel		1
 
 %if %{with perf}
@@ -54,7 +54,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	967f72983655e2479f951195953e8480
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	c01483e46da2366fb8d0b9ca9ccccece
+# Source1-md5:	ade0997fd937c34e26a759f1e980964b
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -64,8 +64,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.4/patch-3.4.30-rt43.patch.xz
-# Source100-md5:	7cd9f16e7e6a2772b3bde5e89e3e1ad9
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.4/patch-3.4.36-rt50.patch.xz
+# Source100-md5:	073a13afffe9f41c97aa2a01e73c75ba
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -287,13 +287,18 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
+	CONFIG_PREEMPT=y
 %if %{with rt}
-	CONFIG_PREEMPT_RT_BASE=y
 	CONFIG_HAVE_PREEMPT_LAZY=y
 	CONFIG_PREEMPT_LAZY=y
-	CONFIG_PREEMPT__LL=n
 	CONFIG_PREEMPT_RTB=n
+	CONFIG_PREEMPT_RT_BASE=y
 	CONFIG_PREEMPT_RT_FULL=y
+	CONFIG_PREEMPT__LL=n
+	CONFIG_RWSEM_GENERIC_SPINLOCK=y
+	CONFIG_RWSEM_XCHGADD_ALGORITHM=n
+%else
+	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 %endif
 %if %{with stats}
 	CONFIG_BINARY_PRINTF=y
