@@ -18,7 +18,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.8
-%define		postver		.4
+%define		postver		.5
 %define		rel		1
 
 %if %{with perf}
@@ -56,7 +56,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1c738edfc54e7c65faeb90c436104e2f
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	40ab82996ff4b49ad3f4e19cf729dcab
+# Source1-md5:	3ac9864bcf512fd71a7ecdd8c9c96d6c
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -137,22 +137,6 @@ This package contains the Linux kernel that is used to boot and run
 your system. It contains few device drivers for specific hardware.
 Most hardware is instead supported by modules loaded after booting.
 
-%package vmlinux
-Summary:	vmlinux - uncompressed kernel image
-Group:		Base/Kernel
-
-%description vmlinux
-vmlinux - uncompressed kernel image.
-
-%package drm
-Summary:	DRM kernel modules
-Group:		Base/Kernel
-Requires(postun):	%{name} = %{epoch}:%{version}-%{release}
-Requires:	%{name} = %{epoch}:%{version}-%{release}
-
-%description drm
-DRM kernel modules.
-
 %package pcmcia
 Summary:	PCMCIA modules
 Group:		Base/Kernel
@@ -172,37 +156,6 @@ AutoReqProv:	no
 
 %description sound-alsa
 ALSA (Advanced Linux Sound Architecture) sound drivers.
-
-%package headers
-Summary:	Header files for the Linux kernel
-Group:		Development/Building
-Provides:	%{name}-headers(netfilter) = %{netfilter_snap}
-AutoReqProv:	no
-
-%description headers
-These are the C header files for the Linux kernel, which define
-structures and constants that are needed when rebuilding the kernel or
-building kernel modules.
-
-%package module-build
-Summary:	Development files for building kernel modules
-Group:		Development/Building
-Requires:	%{name}-headers = %{epoch}:%{version}-%{release}
-AutoReqProv:	no
-
-%description module-build
-Development files from kernel source tree needed to build Linux kernel
-modules from external packages.
-
-%package source
-Summary:	Kernel source tree
-Group:		Development/Building
-Requires:	%{name}-module-build = %{epoch}:%{version}-%{release}
-AutoReqProv:	no
-
-%description source
-This is the source code for the Linux kernel. You can build a custom
-kernel that is better tuned to your particular hardware.
 
 %package doc
 Summary:	Kernel documentation
@@ -302,7 +255,6 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 	CONFIG_OVERLAYFS_FS=m
-	CONFIG_PREEMPT=y
 %if %{with rt}
 	CONFIG_HAVE_PREEMPT_LAZY=y
 	CONFIG_PREEMPT_LAZY=y
@@ -421,7 +373,7 @@ install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/misc
 install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/kernel/{arch,sound,mm}
 
 # rpm obeys filelinkto checks for ghosted symlinks, convert to files
-rm -f $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
+%{__rm} $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
 touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
 
 # no point embed content for %ghost files. empty them
@@ -440,51 +392,15 @@ done
 install -d $RPM_BUILD_ROOT/boot
 cp -a %{objdir}/System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_release}
 cp -a %{objdir}/arch/%{target_arch_dir}/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_release}
-install %{objdir}/vmlinux $RPM_BUILD_ROOT/boot/vmlinux-%{kernel_release}
-
-# /usr/src/linux
-install -d $RPM_BUILD_ROOT%{_kernelsrcdir}/include/generated
-# test if we can hardlink -- %{_builddir} and $RPM_BUILD_ROOT on same partition
-if cp -al %{srcdir}/COPYING $RPM_BUILD_ROOT/COPYING 2>/dev/null; then
-	l=l
-	rm -f $RPM_BUILD_ROOT/COPYING
-fi
-
-cp -a$l %{srcdir}/* $RPM_BUILD_ROOT%{_kernelsrcdir}
-cp -a %{objdir}/Module.symvers $RPM_BUILD_ROOT%{_kernelsrcdir}
-cp -aL %{objdir}/.config $RPM_BUILD_ROOT%{_kernelsrcdir}
-cp -a %{objdir}/include $RPM_BUILD_ROOT%{_kernelsrcdir}
-# copy arch/x86/include/generated
-for dir in $(cd %{objdir} && find arch -name generated -type d); do
-cp -a %{objdir}/$dir $RPM_BUILD_ROOT%{_kernelsrcdir}/$dir
-find $RPM_BUILD_ROOT%{_kernelsrcdir}/$dir -name '.*.cmd' -exec rm "{}" ";"
-done
-
-# version.h location changed in 3.7, but a lot of external modules don't know about it
-# add a compatibility symlink
-ln -s ../generated/uapi/linux/version.h $RPM_BUILD_ROOT%{_kernelsrcdir}/include/linux/version.h
-
-# disable this here, causes a lot of build-time problems and our rpm-build disables it anyway
-%{__sed} -i -e 's|\(CONSTIFY_PLUGIN.*:=.*\)|# \1|' $RPM_BUILD_ROOT%{_kernelsrcdir}/Makefile
-
-# collect module-build files and directories
-# Usage: kernel-module-build.pl $rpmdir $fileoutdir
-fileoutdir=$(pwd)
-cd $RPM_BUILD_ROOT%{_kernelsrcdir}
-%{__perl} %{topdir}/kernel-module-build.pl %{_kernelsrcdir} $fileoutdir
-cd -
 
 %if %{with doc}
 # move to %{_docdir} so we wouldn't depend on any kernel package for dirs
 install -d $RPM_BUILD_ROOT%{_docdir}
 mv $RPM_BUILD_ROOT{%{_kernelsrcdir}/Documentation,%{_docdir}/%{name}-%{version}}
-
 %{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/dontdiff
 %{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/Makefile
 %{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/Makefile
 %{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/*/Makefile
-%else
-%{__rm} -r $RPM_BUILD_ROOT%{_kernelsrcdir}/Documentation
 %endif
 
 %endif
@@ -503,27 +419,14 @@ rm -f $RPM_BUILD_ROOT%{_includedir}/{,*/}.*
 rm -rf $RPM_BUILD_ROOT
 
 %post
-mv -f /boot/vmlinuz{,.old} 2> /dev/null
-mv -f /boot/vmlinuz%{_alt_kernel}{,.old} 2> /dev/null
-mv -f /boot/System.map{,.old} 2> /dev/null
-mv -f /boot/System%{_alt_kernel}.map{,.old} 2> /dev/null
-ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz
-ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz%{_alt_kernel}
-ln -sf System.map-%{kernel_release} /boot/System.map
-ln -sf System.map-%{kernel_release} /boot/System.map%{_alt_kernel}
-
-%depmod %{kernel_release}
-
-%post vmlinux
-mv -f /boot/vmlinux{,.old} 2> /dev/null
-mv -f /boot/vmlinux-%{_alt_kernel}{,.old} 2> /dev/null
-ln -sf vmlinux-%{kernel_release} /boot/vmlinux
-ln -sf vmlinux-%{kernel_release} /boot/vmlinux-%{_alt_kernel}
-
-%post drm
-%depmod %{kernel_release}
-
-%postun drm
+if [ -d /boot/EFI ]; then
+    kernel-install add %{kernel_release} /boot/vmlinuz-%{kernel_release}
+else
+    ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz
+    ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz%{_alt_kernel}
+    ln -sf System.map-%{kernel_release} /boot/System.map
+    ln -sf System.map-%{kernel_release} /boot/System.map%{_alt_kernel}
+fi
 %depmod %{kernel_release}
 
 %post pcmcia
@@ -537,27 +440,6 @@ ln -sf vmlinux-%{kernel_release} /boot/vmlinux-%{_alt_kernel}
 
 %postun sound-alsa
 %depmod %{kernel_release}
-
-%post headers
-ln -snf %{basename:%{_kernelsrcdir}} %{_prefix}/src/linux%{_alt_kernel}
-
-%postun headers
-if [ "$1" = "0" ]; then
-	if [ -L %{_prefix}/src/linux%{_alt_kernel} ]; then
-		if [ "$(readlink %{_prefix}/src/linux%{_alt_kernel})" = "linux%{_alt_kernel}-%{version}" ]; then
-			rm -f %{_prefix}/src/linux%{_alt_kernel}
-		fi
-	fi
-fi
-
-%triggerin module-build -- %{name} = %{epoch}:%{version}-%{release}
-ln -sfn %{_kernelsrcdir} %{_prefix}/lib/modules/%{kernel_release}/build
-ln -sfn %{_kernelsrcdir} %{_prefix}/lib/modules/%{kernel_release}/source
-
-%triggerun module-build -- %{name} = %{epoch}:%{version}-%{release}
-if [ "$1" = 0 ]; then
-	rm -f %{_prefix}/lib/modules/%{kernel_release}/{build,source}
-fi
 
 %pretrans -n linux-libc-headers
 [ ! -L /usr/include/linux ] || rm -f /usr/include/linux
@@ -617,14 +499,6 @@ fi
 %ghost %{_prefix}/lib/modules/%{kernel_release}/build
 %ghost %{_prefix}/lib/modules/%{kernel_release}/source
 
-%files vmlinux
-%defattr(644,root,root,755)
-/boot/vmlinux-%{kernel_release}
-
-%files drm
-%defattr(644,root,root,755)
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/gpu
-
 %files pcmcia
 %defattr(644,root,root,755)
 %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/*ko*
@@ -644,46 +518,6 @@ fi
 %exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
 %exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
 
-%files headers -f files.headers_exclude_kbuild
-%defattr(644,root,root,755)
-%dir %{_kernelsrcdir}
-%{_kernelsrcdir}/include
-%dir %{_kernelsrcdir}/arch
-%dir %{_kernelsrcdir}/arch/[!K]*
-%{_kernelsrcdir}/arch/*/include
-%dir %{_kernelsrcdir}/security
-%dir %{_kernelsrcdir}/security/selinux
-%{_kernelsrcdir}/security/selinux/include
-%{_kernelsrcdir}/.config
-%{_kernelsrcdir}/Module.symvers
-
-%files module-build -f files.mb_include_modulebuild_and_dirs
-%defattr(644,root,root,755)
-%exclude %dir %{_kernelsrcdir}/arch/um
-%{_kernelsrcdir}/arch/*/kernel/asm-offsets*
-%{_kernelsrcdir}/arch/*/kernel/sigframe*.h
-%{_kernelsrcdir}/drivers/lguest/lg.h
-%{_kernelsrcdir}/kernel/bounds.c
-%dir %{_kernelsrcdir}/scripts
-%{_kernelsrcdir}/scripts/Kbuild.include
-%{_kernelsrcdir}/scripts/Makefile*
-%{_kernelsrcdir}/scripts/basic
-%{_kernelsrcdir}/scripts/kconfig
-%{_kernelsrcdir}/scripts/mkcompile_h
-%{_kernelsrcdir}/scripts/mkmakefile
-%{_kernelsrcdir}/scripts/mod
-%{_kernelsrcdir}/scripts/module-common.lds
-%{_kernelsrcdir}/scripts/setlocalversion
-%{_kernelsrcdir}/scripts/*.c
-%{_kernelsrcdir}/scripts/*.sh
-%dir %{_kernelsrcdir}/scripts/selinux
-%{_kernelsrcdir}/scripts/selinux/Makefile
-%dir %{_kernelsrcdir}/scripts/selinux/mdp
-%{_kernelsrcdir}/scripts/selinux/mdp/Makefile
-%{_kernelsrcdir}/scripts/selinux/mdp/*.c
-%exclude %dir %{_kernelsrcdir}/security
-%exclude %dir %{_kernelsrcdir}/security/selinux
-
 %if %{with doc}
 %files doc
 %defattr(644,root,root,755)
@@ -697,68 +531,6 @@ fi
 %lang(ja) %{_docdir}/%{name}-%{version}/ja_JP
 %lang(ko) %{_docdir}/%{name}-%{version}/ko_KR
 %lang(zh_CN) %{_docdir}/%{name}-%{version}/zh_CN
-%endif
-
-%if %{with source}
-%files source -f files.source_exclude_modulebuild_and_dirs
-%defattr(644,root,root,755)
-%{_kernelsrcdir}/arch/*/[!Mik]*
-%{_kernelsrcdir}/arch/*/kernel/[!M]*
-%{_kernelsrcdir}/arch/ia64/ia32/[!M]*
-%{_kernelsrcdir}/arch/ia64/install.sh
-%{_kernelsrcdir}/arch/m68k/ifpsp060/[!M]*
-%{_kernelsrcdir}/arch/m68k/ifpsp060/MISC
-%{_kernelsrcdir}/arch/m68k/install.sh
-%{_kernelsrcdir}/arch/parisc/install.sh
-%{_kernelsrcdir}/arch/x86/ia32/[!M]*
-%{_kernelsrcdir}/arch/ia64/kvm
-%{_kernelsrcdir}/arch/powerpc/kvm
-%{_kernelsrcdir}/arch/s390/kvm
-%{_kernelsrcdir}/arch/x86/kvm
-%exclude %{_kernelsrcdir}/arch/*/kernel/asm-offsets*
-%exclude %{_kernelsrcdir}/arch/*/kernel/sigframe*.h
-%exclude %{_kernelsrcdir}/drivers/lguest/lg.h
-%{_kernelsrcdir}/block
-%{_kernelsrcdir}/crypto
-%{_kernelsrcdir}/drivers
-%{_kernelsrcdir}/firmware
-%{_kernelsrcdir}/fs
-%{_kernelsrcdir}/init
-%{_kernelsrcdir}/ipc
-%{_kernelsrcdir}/kernel
-%exclude %{_kernelsrcdir}/kernel/bounds.c
-%{_kernelsrcdir}/lib
-%{_kernelsrcdir}/mm
-%{_kernelsrcdir}/net
-%{_kernelsrcdir}/virt
-%{_kernelsrcdir}/samples
-%{_kernelsrcdir}/scripts/*
-%exclude %{_kernelsrcdir}/scripts/Kbuild.include
-%exclude %{_kernelsrcdir}/scripts/Makefile*
-%exclude %{_kernelsrcdir}/scripts/basic
-%exclude %{_kernelsrcdir}/scripts/kconfig
-%exclude %{_kernelsrcdir}/scripts/mkcompile_h
-%exclude %{_kernelsrcdir}/scripts/mkmakefile
-%exclude %{_kernelsrcdir}/scripts/mod
-%exclude %{_kernelsrcdir}/scripts/module-common.lds
-%exclude %{_kernelsrcdir}/scripts/setlocalversion
-%exclude %{_kernelsrcdir}/scripts/*.c
-%exclude %{_kernelsrcdir}/scripts/*.sh
-%exclude %dir %{_kernelsrcdir}/scripts/selinux
-%exclude %{_kernelsrcdir}/scripts/selinux/Makefile
-%exclude %dir %{_kernelsrcdir}/scripts/selinux/mdp
-%exclude %{_kernelsrcdir}/scripts/selinux/mdp/Makefile
-%exclude %{_kernelsrcdir}/scripts/selinux/mdp/*.c
-%{_kernelsrcdir}/sound
-%{_kernelsrcdir}/security
-%exclude %{_kernelsrcdir}/security/selinux/include
-%{_kernelsrcdir}/tools
-%{_kernelsrcdir}/usr
-%{_kernelsrcdir}/COPYING
-%{_kernelsrcdir}/CREDITS
-%{_kernelsrcdir}/MAINTAINERS
-%{_kernelsrcdir}/README
-%{_kernelsrcdir}/REPORTING-BUGS
 %endif
 
 %else
