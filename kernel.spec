@@ -19,7 +19,7 @@
 
 %define		basever		3.8
 %define		postver		.8
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
