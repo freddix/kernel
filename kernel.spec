@@ -18,8 +18,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.8
-%define		postver		.8
-%define		rel		2
+%define		postver		.11
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -56,7 +56,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	1c738edfc54e7c65faeb90c436104e2f
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	08cdcef928c2ca402adf1c444a3c43ac
+# Source1-md5:	76ec67882ad94b8ab43c70a46befca13
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -66,8 +66,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.8/patch-3.8.4-rt2.patch.xz
-# Source100-md5:	22014502fe176ae6dfa33d26f20dbc92
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.8/patch-3.8.10-rt6.patch.xz
+# Source100-md5:	23d715c891ecfb436cb2a4c4ea5286af
 #
 # patches
 Patch0:		kernel-modpost.patch
@@ -107,7 +107,6 @@ Requires:	coreutils
 Requires:	kmod
 Provides:	%{name}(vermagic) = %{kernel_release}
 Provides:	kernel(ureadahead) = %{kernel_release}
-ExclusiveOS:	Linux
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %define		_enable_debug_packages	0
@@ -136,26 +135,6 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 This package contains the Linux kernel that is used to boot and run
 your system. It contains few device drivers for specific hardware.
 Most hardware is instead supported by modules loaded after booting.
-
-%package pcmcia
-Summary:	PCMCIA modules
-Group:		Base/Kernel
-Requires(postun):	%{name} = %{epoch}:%{version}-%{release}
-Requires:	%{name} = %{epoch}:%{version}-%{release}
-AutoReqProv:	no
-
-%description pcmcia
-PCMCIA modules.
-
-%package sound-alsa
-Summary:	ALSA kernel modules
-Group:		Base/Kernel
-Requires(postun):	%{name} = %{epoch}:%{version}-%{release}
-Requires:	%{name} = %{epoch}:%{version}-%{release}
-AutoReqProv:	no
-
-%description sound-alsa
-ALSA (Advanced Linux Sound Architecture) sound drivers.
 
 %package doc
 Summary:	Kernel documentation
@@ -367,8 +346,6 @@ cd linux-%{basever}/tools/perf
 
 touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/modules.dep
 
-install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/misc
-
 # create directories which may be missing, to simplyfy %files
 install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/kernel/{arch,sound,mm}
 
@@ -411,8 +388,8 @@ mv $RPM_BUILD_ROOT{%{_kernelsrcdir}/Documentation,%{_docdir}/%{name}-%{version}}
 	ARCH=%{_target_base_arch}
 
 # provided by glibc-headers
-rm -rf $RPM_BUILD_ROOT%{_includedir}/scsi
-rm -f $RPM_BUILD_ROOT%{_includedir}/{,*/}.*
+%{__rm} -r $RPM_BUILD_ROOT%{_includedir}/scsi
+%{__rm} $RPM_BUILD_ROOT%{_includedir}/{,*/}.*
 %endif
 
 %clean
@@ -429,17 +406,10 @@ else
 fi
 %depmod %{kernel_release}
 
-%post pcmcia
-%depmod %{kernel_release}
-
-%postun pcmcia
-%depmod %{kernel_release}
-
-%post sound-alsa
-%depmod %{kernel_release}
-
-%postun sound-alsa
-%depmod %{kernel_release}
+%postun
+if [ -d /boot/EFI ]; then
+    kernel-install remove %{kernel_release} /boot/vmlinuz-%{kernel_release}
+fi
 
 %pretrans -n linux-libc-headers
 [ ! -L /usr/include/linux ] || rm -f /usr/include/linux
@@ -455,20 +425,6 @@ fi
 
 %dir %{_prefix}/lib/modules/%{kernel_release}
 %dir %{_prefix}/lib/modules/%{kernel_release}/kernel
-%dir %{_prefix}/lib/modules/%{kernel_release}/kernel/sound
-%dir %{_prefix}/lib/modules/%{kernel_release}/misc
-
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/gpu
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/[!p]*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pd6729.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
-
 %{_prefix}/lib/modules/%{kernel_release}/kernel/arch
 %{_prefix}/lib/modules/%{kernel_release}/kernel/crypto
 %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers
@@ -478,13 +434,11 @@ fi
 %{_prefix}/lib/modules/%{kernel_release}/kernel/mm
 %{_prefix}/lib/modules/%{kernel_release}/kernel/net
 %{_prefix}/lib/modules/%{kernel_release}/kernel/security
-%{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/sound
 
 # provided by build
 %{_prefix}/lib/modules/%{kernel_release}/modules.order
 %{_prefix}/lib/modules/%{kernel_release}/modules.builtin*
-
 # rest modules.* are ghost (regenerated by post depmod -a invocation)
 %ghost %{_prefix}/lib/modules/%{kernel_release}/modules.alias
 %ghost %{_prefix}/lib/modules/%{kernel_release}/modules.alias.bin
@@ -498,25 +452,6 @@ fi
 # symlinks pointing to kernelsrcdir
 %ghost %{_prefix}/lib/modules/%{kernel_release}/build
 %ghost %{_prefix}/lib/modules/%{kernel_release}/source
-
-%files pcmcia
-%defattr(644,root,root,755)
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/*ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pcmcia*ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
-
-%files sound-alsa
-%defattr(644,root,root,755)
-%{_prefix}/lib/modules/%{kernel_release}/kernel/sound
-%exclude %dir %{_prefix}/lib/modules/%{kernel_release}/kernel/sound
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
 
 %if %{with doc}
 %files doc
