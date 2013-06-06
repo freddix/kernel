@@ -389,7 +389,6 @@ mv $RPM_BUILD_ROOT{%{_kernelsrcdir}/Documentation,%{_docdir}/%{name}-%{version}}
 
 # provided by glibc-headers
 %{__rm} -r $RPM_BUILD_ROOT%{_includedir}/scsi
-%{__rm} $RPM_BUILD_ROOT%{_includedir}/{,*/}.*
 %endif
 
 %clean
