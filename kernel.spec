@@ -17,9 +17,9 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.9
-%define		postver		.7
-%define		rel		1
+%define		basever		3.10
+%define		postver		.0
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -53,10 +53,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	4348c9b6b2eb3144d601e87c19d5d909
+# Source0-md5:	4f25cd5bec5f8d5a7d935b3f2ccb8481
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	74005c469fbd309ab631d981e2d3a6e7
+# Source1-md5:	41f350c2fd6aa14414bf39f173a8e6a3
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -260,6 +260,7 @@ BuildConfig() {
 	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
 %if %{with stats}
+	CONFIG_ARCH_HAS_DEBUG_STRICT_USER_COPY_CHECKS=y
 	CONFIG_BINARY_PRINTF=y
 	CONFIG_BRANCH_PROFILE_NONE=y
 	CONFIG_CONTEXT_SWITCH_TRACER=y
