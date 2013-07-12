@@ -19,7 +19,7 @@
 
 %define		basever		3.10
 %define		postver		.0
-%define		rel		2
+%define		rel		3
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -269,6 +269,7 @@ BuildConfig() {
 	CONFIG_ENABLE_DEFAULT_TRACERS=y
 	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
 	CONFIG_EVENT_TRACING=y
+	CONFIG_FTRACE=y
 	CONFIG_HAVE_DEBUG_KMEMLEAK=y
 	CONFIG_NOP_TRACER=y
 	CONFIG_RING_BUFFER=y
@@ -276,6 +277,8 @@ BuildConfig() {
 	CONFIG_SCHED_DEBUG=y
 	CONFIG_STACKTRACE=y
 	CONFIG_TIMER_STATS=y
+	CONFIG_TRACEPOINTS=y
+	CONFIG_TRACE_CLOCK=y
 	CONFIG_TRACING=y
 %else
 	CONFIG_BINARY_PRINTF=n
