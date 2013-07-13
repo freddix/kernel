@@ -19,7 +19,7 @@
 
 %define		basever		3.10
 %define		postver		.0
-%define		rel		3
+%define		rel		4
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -283,6 +283,7 @@ BuildConfig() {
 %else
 	CONFIG_BINARY_PRINTF=n
 	CONFIG_DEBUG_KERNEL=n
+	CONFIG_FTRACE=n
 %endif
 EOCONFIG
 
