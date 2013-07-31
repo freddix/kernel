@@ -18,8 +18,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.10
-%define		postver		.0
-%define		rel		4
+%define		postver		.4
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -56,7 +56,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	4f25cd5bec5f8d5a7d935b3f2ccb8481
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	41f350c2fd6aa14414bf39f173a8e6a3
+# Source1-md5:	2e46ab138670b3171b52b849568cb42f
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -280,6 +280,11 @@ BuildConfig() {
 	CONFIG_TRACEPOINTS=y
 	CONFIG_TRACE_CLOCK=y
 	CONFIG_TRACING=y
+	CONFIG_LOCKUP_DETECTOR=y
+	CONFIG_HARDLOCKUP_DETECTOR=y
+	CONFIG_DETECT_HUNG_TASK=y
+	CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=120
+	CONFIG_BOOTPARAM_HUNG_TASK_PANIC_VALUE=0
 %else
 	CONFIG_BINARY_PRINTF=n
 	CONFIG_DEBUG_KERNEL=n
