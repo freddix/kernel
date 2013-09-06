@@ -19,7 +19,7 @@
 
 %define		basever		3.10
 %define		postver		.10
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -78,6 +78,7 @@ Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v6-3.8.patch
 Patch101:	0002-block-introduce-the-BFQ-v6-I-O-sched-for-3.8.patch
 # http://ck.kolivas.org/patches/bfs/3.0/3.8
 Patch110:	3.8-sched-bfs-428.patch
+Patch200:	kernel-revert-8af6c08830b1ae114d1a8b548b1f8b056e068887..patch
 #
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
@@ -197,6 +198,8 @@ xz -dc %{SOURCE1} | patch -p1 -s
 xz -dc %{SOURCE100} | patch -p1 -s
 %{__rm} localversion-rt
 %endif
+
+%patch200 -p1
 
 # Fix EXTRAVERSION in main Makefile
 sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
