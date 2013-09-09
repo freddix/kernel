@@ -10,16 +10,14 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_with	bfs		# BFS by C.Kolivas
-%bcond_with	bfq		# BFQ (Budget Fair Queueing) scheduler
 %bcond_with	rt		# build RT kernel
 %bcond_with	stats		# enable infrastructure required for bootchart, powertop, etc.
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.10
-%define		postver		.10
-%define		rel		2
+%define		basever		3.11
+%define		postver		.0
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -31,9 +29,6 @@
 
 %if %{with rt}
 %define		alt_kernel	rt%{?with_stats:_stats}
-%endif
-%if %{with bfs}
-%define		alt_kernel	bfs%{?with_stats:_stats}
 %endif
 %if !%{with rt} && !%{with bfs}
 %define		alt_kernel	std%{?with_stats:_stats}
@@ -53,7 +48,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	4f25cd5bec5f8d5a7d935b3f2ccb8481
+# Source0-md5:	fea363551ff45fbe4cb88497b863b261
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	d010ef17d3e577fd1bdcb6887f2b9836
@@ -66,20 +61,9 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.8/patch-3.8.11-rt8.patch.xz
-# Source100-md5:	a16483838a4b2d007bc97412978a48c6
-#
-# patches
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.10/patch-3.10.10-rt7.patch.xz
+# Source100-md5:	b634614a96f47a564bc32bc87afe587f
 Patch0:		kernel-modpost.patch
-# based on http://livenet.selfip.com/ftp/debian/overlayfs/
-Patch1:		kernel-overlayfs.patch
-# http://algo.ing.unimo.it/people/paolo/disk_sched/patches/
-Patch100:	0001-block-cgroups-kconfig-build-bits-for-BFQ-v6-3.8.patch
-Patch101:	0002-block-introduce-the-BFQ-v6-I-O-sched-for-3.8.patch
-# http://ck.kolivas.org/patches/bfs/3.0/3.8
-Patch110:	3.8-sched-bfs-428.patch
-Patch200:	kernel-revert-8af6c08830b1ae114d1a8b548b1f8b056e068887..patch
-#
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -183,23 +167,11 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
 %patch0 -p1
-%patch1 -p1
-
-%if %{with bfq}
-%patch100 -p1
-%patch101 -p1
-%endif
-
-%if %{with bfs}
-%patch110 -p1
-%endif
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
 %{__rm} localversion-rt
 %endif
-
-%patch200 -p1
 
 # Fix EXTRAVERSION in main Makefile
 sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
