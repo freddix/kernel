@@ -16,8 +16,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.10
-%define		postver		.10
-%define		rel		2
+%define		postver		.11
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -51,7 +51,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	4f25cd5bec5f8d5a7d935b3f2ccb8481
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	d010ef17d3e577fd1bdcb6887f2b9836
+# Source1-md5:	9aadf2325fed53e971fe59bc6c7c3b89
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -66,8 +66,6 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.10/patch-3.10.10
 #
 # patches
 Patch0:		kernel-modpost.patch
-# based on http://livenet.selfip.com/ftp/debian/overlayfs/
-Patch1:		kernel-overlayfs.patch
 Patch200:	kernel-revert-8af6c08830b1ae114d1a8b548b1f8b056e068887..patch
 #
 URL:		http://www.kernel.org/
@@ -173,7 +171,6 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
 %patch0 -p1
-%patch1 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
@@ -217,7 +214,6 @@ EOF
 BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
-	CONFIG_OVERLAYFS_FS=m
 %if %{with rt}
 	CONFIG_HAVE_PREEMPT_LAZY=y
 	CONFIG_PREEMPT_LAZY=y
@@ -229,19 +225,6 @@ BuildConfig() {
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=n
 %else
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
-%endif
-%if %{with bfs}
-	CONFIG_SCHED_BFS=y
-%endif
-%if %{with bfq}
-	CONFIG_CGROUP_BFQIO=y
-	CONFIG_DEFAULT_BFQ=y
-	CONFIG_DEFAULT_CFQ=n
-	CONFIG_DEFAULT_IOSCHED="bfq"
-	CONFIG_IOSCHED_BFQ=y
-%else
-	CONFIG_DEFAULT_CFQ=y
-	CONFIG_DEFAULT_IOSCHED="cfq"
 %endif
 %if %{with stats}
 	CONFIG_ARCH_HAS_DEBUG_STRICT_USER_COPY_CHECKS=y
