@@ -66,7 +66,7 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.10/patch-3.10.10
 #
 # patches
 Patch0:		kernel-modpost.patch
-Patch200:	kernel-revert-8af6c08830b1ae114d1a8b548b1f8b056e068887..patch
+Patch1:		kernel-revert-8af6c08830b1ae114d1a8b548b1f8b056e068887..patch
 #
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
@@ -171,13 +171,13 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
 %patch0 -p1
+%patch1 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
 %{__rm} localversion-rt
 %endif
 
-%patch200 -p1
 
 # Fix EXTRAVERSION in main Makefile
 sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
