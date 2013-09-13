@@ -31,7 +31,7 @@
 %define		alt_kernel	rt%{?with_stats:_stats}
 %endif
 %if !%{with rt} && !%{with bfs}
-%define		alt_kernel	std%{?with_stats:_stats}
+%define		alt_kernel	lts%{?with_stats:_stats}
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
