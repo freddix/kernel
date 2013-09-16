@@ -30,7 +30,7 @@
 %if %{with rt}
 %define		alt_kernel	rt%{?with_stats:_stats}
 %endif
-%if !%{with rt} && !%{with bfs}
+%if !%{with rt}
 %define		alt_kernel	std%{?with_stats:_stats}
 %endif
 
