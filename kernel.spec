@@ -16,7 +16,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.11
-%define		postver		.1
+%define		postver		.2
 %define		rel		1
 
 %if %{with perf}
@@ -51,7 +51,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	fea363551ff45fbe4cb88497b863b261
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	43331cad943b9540afea49ad8ce5cf46
+# Source1-md5:	5aa3286dcc7d70ceb50c3cbc64bc1cd8
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -66,8 +66,6 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.10/patch-3.10.10
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
-Patch3:		drm-cirrus-Correct-register-values-for-16bpp.patch
-Patch4:		drm-cirrus-Use-16bpp-as-default.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -174,9 +172,6 @@ xz -dc %{SOURCE1} | patch -p1 -s
 # lz4 for squashfs
 %patch1 -p1
 %patch2 -p1
-# cirrus drm fixes from suse
-%patch3 -p1
-%patch4 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
