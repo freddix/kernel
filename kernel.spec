@@ -16,8 +16,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.11
-%define		postver		.2
-%define		rel		1
+%define		postver		.3
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -51,7 +51,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	fea363551ff45fbe4cb88497b863b261
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	5aa3286dcc7d70ceb50c3cbc64bc1cd8
+# Source1-md5:	b098457c2d9e9626faacfda931deefb6
 %endif
 #
 Source3:	kernel-autoconf.h
