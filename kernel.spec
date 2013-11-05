@@ -15,9 +15,9 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.11
-%define		postver		.6
-%define		rel		1
+%define		basever		3.12
+%define		postver		.0
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -48,10 +48,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	fea363551ff45fbe4cb88497b863b261
+# Source0-md5:	cc6ee608854e0da4b64f6c1ff8b6398c
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	c44ebb225fe9956b636b79ab6b61aa42
+# Source1-md5:	7173d1ea97061665b2eff7a3ac7f75ca
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -179,7 +179,7 @@ xz -dc %{SOURCE100} | patch -p1 -s
 %endif
 
 # Fix EXTRAVERSION in main Makefile
-sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
+%{__sed} -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
 
 # cleanup backups after patching
 find '(' -name '*~' -o -name '*.orig' -o -name '.gitignore' ')' -print0 | xargs -0 -r -l512 rm -f
