@@ -1,6 +1,3 @@
-# LATEST VERSION CHECKER:
-# curl -s http://www.kernel.org/kdist/finger_banner
-
 %include	/usr/lib/rpm/macros.perl
 
 %bcond_with	verbose		# verbose build (V=1)
@@ -14,8 +11,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.4
-%define		postver		.37
-%define		rel		2
+%define		postver		.75
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -52,7 +49,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	967f72983655e2479f951195953e8480
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	ade0997fd937c34e26a759f1e980964b
+# Source1-md5:	6df6a2c9b9fea40fc572da7138e94ac0
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -62,8 +59,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.4/patch-3.4.36-rt50.patch.xz
-# Source100-md5:	073a13afffe9f41c97aa2a01e73c75ba
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.4/patch-3.4.74-rt92.patch.xz
+# Source100-md5:	6bdd4757ef22e6e789152eaadaea0309
 #
 # patches
 Patch0:		kernel-modpost.patch
