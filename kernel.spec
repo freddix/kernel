@@ -1,5 +1,7 @@
 %include	/usr/lib/rpm/macros.perl
 
+%bcond_with	doc		# kernel-doc package
+%bcond_with	source		# kernel-source package
 %bcond_with	verbose		# verbose build (V=1)
 
 %bcond_with	perf		# performance tool
@@ -25,11 +27,8 @@
 %if %{with rt}
 %define		alt_kernel	rt%{?with_stats:_stats}
 %endif
-%if %{with bfs}
-%define		alt_kernel	bfs%{?with_stats:_stats}
-%endif
-%if !%{with rt} && !%{with bfs}
-%define		alt_kernel	std%{?with_stats:_stats}
+%if !%{with rt}
+%define		alt_kernel	lts%{?with_stats:_stats}
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
@@ -64,10 +63,7 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.4/patch-3.4.74-r
 #
 # patches
 Patch0:		kernel-modpost.patch
-# https://dev.openwrt.org/browser/trunk/target/linux/generic/patches-3.3/100-overlayfs_v12.patch
-Patch1:		kernel-overlayfs.patch
-# https://bugzilla.kernel.org/show_bug.cgi?id=11998
-Patch2:		kernel-e1000e-control-mdix.patch
+Patch1:		kernel-e1000e-control-mdix.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -78,6 +74,7 @@ BuildRequires:	binutils-devel
 BuildRequires:	docbook-dtd45-xml
 BuildRequires:	elfutils-devel
 BuildRequires:	gtk+-devel
+BuildRequires:	libunwind-devel
 BuildRequires:	newt-devel
 BuildRequires:	python-devel
 BuildRequires:	rpm-perlprov
@@ -91,12 +88,10 @@ BuildRequires:	perl-base
 %endif
 Requires(post):	coreutils
 Requires(post):	kmod
-Requires(post):	systemd
 Requires:	coreutils
 Requires:	kmod
 Provides:	%{name}(vermagic) = %{kernel_release}
 Provides:	kernel(ureadahead) = %{kernel_release}
-ExclusiveOS:	Linux
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %define		_enable_debug_packages	0
@@ -126,25 +121,14 @@ This package contains the Linux kernel that is used to boot and run
 your system. It contains few device drivers for specific hardware.
 Most hardware is instead supported by modules loaded after booting.
 
-%package pcmcia
-Summary:	PCMCIA modules
-Group:		Base/Kernel
-Requires(postun):	%{name} = %{epoch}:%{version}-%{release}
-Requires:	%{name} = %{epoch}:%{version}-%{release}
+%package doc
+Summary:	Kernel documentation
+Group:		Documentation
 AutoReqProv:	no
 
-%description pcmcia
-PCMCIA modules.
-
-%package sound-alsa
-Summary:	ALSA kernel modules
-Group:		Base/Kernel
-Requires(postun):	%{name} = %{epoch}:%{version}-%{release}
-Requires:	%{name} = %{epoch}:%{version}-%{release}
-AutoReqProv:	no
-
-%description sound-alsa
-ALSA (Advanced Linux Sound Architecture) sound drivers.
+%description doc
+This is the documentation for the Linux kernel, as found in
+/usr/src/linux/Documentation directory.
 
 %package -n linux-libc-headers
 Summary:	Sanitised kernel headers
@@ -164,6 +148,7 @@ glibc package.
 %package -n perf
 Summary:	Performance analysis tools for Linux
 Group:		Applications/System
+Requires:	gtk+
 
 %description -n perf
 Performance counters for Linux are are a new kernel-based subsystem
@@ -183,7 +168,6 @@ xz -dc %{SOURCE1} | patch -p1 -s
 
 %patch0 -p1
 %patch1 -p1
-%patch2 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
@@ -191,7 +175,7 @@ xz -dc %{SOURCE100} | patch -p1 -s
 %endif
 
 # Fix EXTRAVERSION in main Makefile
-sed -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
+%{__sed} -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
 
 # cleanup backups after patching
 find '(' -name '*~' -o -name '*.orig' -o -name '.gitignore' ')' -print0 | xargs -0 -r -l512 rm -f
@@ -225,8 +209,6 @@ EOF
 BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
-	CONFIG_OVERLAYFS_FS=m
-	CONFIG_PREEMPT=y
 %if %{with rt}
 	CONFIG_HAVE_PREEMPT_LAZY=y
 	CONFIG_PREEMPT_LAZY=y
@@ -240,26 +222,35 @@ BuildConfig() {
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 %endif
 %if %{with stats}
-	CONFIG_BINARY_PRINTF=y
-	CONFIG_BRANCH_PROFILE_NONE=y
-	CONFIG_CONTEXT_SWITCH_TRACER=y
+	CONFIG_AUDIT=y
+	CONFIG_AUDITSYSCALL=y
+	CONFIG_AUDIT_WATCH=y
+	CONFIG_AUDIT_TREE=y
+	CONFIG_AUDIT_LOGINUID_IMMUTABLE=y
 	CONFIG_DEBUG_KERNEL=y
-	CONFIG_DEBUG_RODATA=y
-	CONFIG_ENABLE_DEFAULT_TRACERS=y
-	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
-	CONFIG_EVENT_TRACING=y
-	CONFIG_FTRACE=y
-	CONFIG_HAVE_DEBUG_KMEMLEAK=y
+	CONFIG_DETECT_HUNG_TASK=y
+	CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=120
+	CONFIG_BOOTPARAM_HUNG_TASK_PANIC_VALUE=0
+	CONFIG_SCHED_DEBUG=y
+	CONFIG_SCHEDSTATS=y
+	CONFIG_TIMER_STATS=y
+	CONFIG_STACKTRACE=y
 	CONFIG_NOP_TRACER=y
 	CONFIG_RING_BUFFER=y
-	CONFIG_SCHEDSTATS=y
-	CONFIG_SCHED_DEBUG=y
-	CONFIG_STACKTRACE=y
-	CONFIG_TIMER_STATS=y
+	CONFIG_EVENT_TRACING=y
+	CONFIG_EVENT_POWER_TRACING_DEPRECATED=y
+	CONFIG_CONTEXT_SWITCH_TRACER=y
 	CONFIG_TRACING=y
+	CONFIG_FTRACE=y
+	CONFIG_ENABLE_DEFAULT_TRACERS=y
+	CONFIG_BRANCH_PROFILE_NONE=y
+	CONFIG_DEBUG_RODATA=y
+	CONFIG_BINARY_PRINTF=y
+	CONFIG_AUDIT_GENERIC=y
 %else
-	CONFIG_DEBUG_KERNEL=n
+	CONFIG_AUDIT=n
 	CONFIG_BINARY_PRINTF=n
+	CONFIG_DEBUG_KERNEL=n
 	CONFIG_FTRACE=n
 %endif
 EOCONFIG
@@ -332,7 +323,7 @@ touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/modules.dep
 install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/kernel/{arch,sound,mm}
 
 # rpm obeys filelinkto checks for ghosted symlinks, convert to files
-%{__rm} -f $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
+%{__rm} $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
 touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
 
 # no point embed content for %ghost files. empty them
@@ -352,6 +343,16 @@ install -d $RPM_BUILD_ROOT/boot
 cp -a %{objdir}/System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_release}
 cp -a %{objdir}/arch/%{target_arch_dir}/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_release}
 
+%if %{with doc}
+# move to %{_docdir} so we wouldn't depend on any kernel package for dirs
+install -d $RPM_BUILD_ROOT%{_docdir}
+mv $RPM_BUILD_ROOT{%{_kernelsrcdir}/Documentation,%{_docdir}/%{name}-%{version}}
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/dontdiff
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/Makefile
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/Makefile
+%{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/*/Makefile
+%endif
+
 %endif
 
 %if %{with uheaders}
@@ -361,39 +362,26 @@ cp -a %{objdir}/arch/%{target_arch_dir}/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinu
 
 # provided by glibc-headers
 %{__rm} -r $RPM_BUILD_ROOT%{_includedir}/scsi
-%{__rm} $RPM_BUILD_ROOT%{_includedir}/{,*/}.*
 %endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %post
-%depmod %{kernel_release}
 if [ -d /boot/EFI ]; then
-	kernel-install add %{kernel_release} /boot/vmlinuz-%{kernel_release}
+    kernel-install add %{kernel_release} /boot/vmlinuz-%{kernel_release}
 else
-	ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz
-	ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz%{_alt_kernel}
-	ln -sf System.map-%{kernel_release} /boot/System.map
-	ln -sf System.map-%{kernel_release} /boot/System.map%{_alt_kernel}
+    ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz
+    ln -sf vmlinuz-%{kernel_release} /boot/vmlinuz%{_alt_kernel}
+    ln -sf System.map-%{kernel_release} /boot/System.map
+    ln -sf System.map-%{kernel_release} /boot/System.map%{_alt_kernel}
 fi
+%depmod %{kernel_release}
 
 %postun
 if [ -d /boot/EFI ]; then
-	kernel-install remove %{kernel_release} /boot/vmlinuz-%{kernel_release}
+    kernel-install remove %{kernel_release} /boot/vmlinuz-%{kernel_release}
 fi
-
-%post pcmcia
-%depmod %{kernel_release}
-
-%postun pcmcia
-%depmod %{kernel_release}
-
-%post sound-alsa
-%depmod %{kernel_release}
-
-%postun sound-alsa
-%depmod %{kernel_release}
 
 %pretrans -n linux-libc-headers
 [ ! -L /usr/include/linux ] || rm -f /usr/include/linux
@@ -409,23 +397,6 @@ fi
 
 %dir %{_prefix}/lib/modules/%{kernel_release}
 %dir %{_prefix}/lib/modules/%{kernel_release}/kernel
-%dir %{_prefix}/lib/modules/%{kernel_release}/kernel/sound
-
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/gpu
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/cx88/cx88-alsa.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/em28xx/em28xx-alsa.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/saa7134/saa7134-alsa.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/parport/parport_cs.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/[!p]*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pd6729.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
-
 %{_prefix}/lib/modules/%{kernel_release}/kernel/arch
 %{_prefix}/lib/modules/%{kernel_release}/kernel/crypto
 %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers
@@ -435,13 +406,11 @@ fi
 %{_prefix}/lib/modules/%{kernel_release}/kernel/mm
 %{_prefix}/lib/modules/%{kernel_release}/kernel/net
 %{_prefix}/lib/modules/%{kernel_release}/kernel/security
-%{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
+%{_prefix}/lib/modules/%{kernel_release}/kernel/sound
 
 # provided by build
 %{_prefix}/lib/modules/%{kernel_release}/modules.order
 %{_prefix}/lib/modules/%{kernel_release}/modules.builtin*
-
 # rest modules.* are ghost (regenerated by post depmod -a invocation)
 %ghost %{_prefix}/lib/modules/%{kernel_release}/modules.alias
 %ghost %{_prefix}/lib/modules/%{kernel_release}/modules.alias.bin
@@ -456,28 +425,20 @@ fi
 %ghost %{_prefix}/lib/modules/%{kernel_release}/build
 %ghost %{_prefix}/lib/modules/%{kernel_release}/source
 
-%files pcmcia
+%if %{with doc}
+%files doc
 %defattr(644,root,root,755)
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/*ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/*/pcmcia
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/pcmcia/pcmcia*ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/bluetooth/*_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/ata/pata_pcmcia.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/*_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/b43
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/net/wireless/hostap/hostap_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/parport/parport_cs.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/usb/host/sl811_cs.ko*
+%dir %{_docdir}/%{name}-%{version}
 
-%files sound-alsa
-%defattr(644,root,root,755)
-%{_prefix}/lib/modules/%{kernel_release}/kernel/sound
-%exclude %dir %{_prefix}/lib/modules/%{kernel_release}/kernel/sound
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/ac97_bus.ko*
-%exclude %{_prefix}/lib/modules/%{kernel_release}/kernel/sound/sound*.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/cx88/cx88-alsa.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/em28xx/em28xx-alsa.ko*
-%{_prefix}/lib/modules/%{kernel_release}/kernel/drivers/media/video/saa7134/saa7134-alsa.ko*
+%{_docdir}/%{name}-%{version}/[!jkz]*
+%{_docdir}/%{name}-%{version}/[jkz]*.txt
+%{_docdir}/%{name}-%{version}/kbuild
+%{_docdir}/%{name}-%{version}/kdump
+%{_docdir}/%{name}-%{version}/kvm
+%lang(ja) %{_docdir}/%{name}-%{version}/ja_JP
+%lang(ko) %{_docdir}/%{name}-%{version}/ko_KR
+%lang(zh_CN) %{_docdir}/%{name}-%{version}/zh_CN
+%endif
 
 %else
 
