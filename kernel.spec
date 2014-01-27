@@ -11,12 +11,12 @@
 %bcond_with	uheaders	# sanitised kernel headers
 
 %bcond_with	rt		# build RT kernel
-%bcond_with	stats		# enable infrastructure required for bootchart, powertop, etc.
+%bcond_with	srv		# enable infrastructure required for bootchart, powertop, etc.
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.12
-%define		postver		.8
+%define		postver		.9
 %define		rel		1
 
 %if %{with perf}
@@ -28,10 +28,10 @@
 %endif
 
 %if %{with rt}
-%define		alt_kernel	rt%{?with_stats:_stats}
+%define		alt_kernel	rt
 %endif
 %if !%{with rt}
-%define		alt_kernel	std%{?with_stats:_stats}
+%define		alt_kernel	%{?with_srv:server}%{!?with_srv:desktop}
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
@@ -51,7 +51,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	cc6ee608854e0da4b64f6c1ff8b6398c
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	03d34842e3a1197d17055610f62627b8
+# Source1-md5:	0d539fc9bc799663caf0f383d9252d36
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -61,8 +61,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.12/patch-3.12.6-rt9.patch.xz
-# Source100-md5:	b6b66c250459a63664e23235153f587c
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.12/patch-3.12.8-rt11.patch.xz
+# Source100-md5:	4fcc03762fbc78465951b57ccd0b5a9b
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
@@ -225,41 +225,6 @@ BuildConfig() {
 %else
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 %endif
-%if %{with stats}
-	CONFIG_AUDIT=y
-	CONFIG_AUDITSYSCALL=y
-	CONFIG_AUDIT_WATCH=y
-	CONFIG_AUDIT_TREE=y
-	CONFIG_AUDIT_LOGINUID_IMMUTABLE=y
-	CONFIG_TRACEPOINTS=y
-	CONFIG_DEBUG_KERNEL=y
-	CONFIG_LOCKUP_DETECTOR=y
-	CONFIG_HARDLOCKUP_DETECTOR=y
-	CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC_VALUE=0
-	CONFIG_DETECT_HUNG_TASK=y
-	CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=120
-	CONFIG_BOOTPARAM_HUNG_TASK_PANIC_VALUE=0
-	CONFIG_SCHED_DEBUG=y
-	CONFIG_SCHEDSTATS=y
-	CONFIG_TIMER_STATS=y
-	CONFIG_STACKTRACE=y
-	CONFIG_NOP_TRACER=y
-	CONFIG_TRACE_CLOCK=y
-	CONFIG_RING_BUFFER=y
-	CONFIG_EVENT_TRACING=y
-	CONFIG_CONTEXT_SWITCH_TRACER=y
-	CONFIG_TRACING=y
-	CONFIG_FTRACE=y
-	CONFIG_ENABLE_DEFAULT_TRACERS=y
-	CONFIG_BRANCH_PROFILE_NONE=y
-	CONFIG_DEBUG_RODATA=y
-	CONFIG_BINARY_PRINTF=y
-%else
-	CONFIG_AUDIT=n
-	CONFIG_BINARY_PRINTF=n
-	CONFIG_DEBUG_KERNEL=n
-	CONFIG_FTRACE=n
-%endif
 	CONFIG_SQUASHFS_LZ4=y
 EOCONFIG
 
@@ -409,7 +374,6 @@ fi
 %{_prefix}/lib/modules/%{kernel_release}/kernel/crypto
 %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers
 %{_prefix}/lib/modules/%{kernel_release}/kernel/fs
-%{_prefix}/lib/modules/%{kernel_release}/kernel/kernel
 %{_prefix}/lib/modules/%{kernel_release}/kernel/lib
 %{_prefix}/lib/modules/%{kernel_release}/kernel/mm
 %{_prefix}/lib/modules/%{kernel_release}/kernel/net
