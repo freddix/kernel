@@ -15,9 +15,9 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.12
-%define		postver		.8
-%define		rel		1
+%define		basever		3.13
+%define		postver		.0
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -48,7 +48,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	cc6ee608854e0da4b64f6c1ff8b6398c
+# Source0-md5:	0ecbaf65c00374eb4a826c2f9f37606f
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	03d34842e3a1197d17055610f62627b8
@@ -170,8 +170,8 @@ xz -dc %{SOURCE1} | patch -p1 -s
 
 %patch0 -p1
 # lz4 for squashfs
-%patch1 -p1
-%patch2 -p1
+#%patch1 -p1
+#%patch2 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
