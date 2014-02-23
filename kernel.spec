@@ -16,7 +16,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.12
-%define		postver		.10
+%define		postver		.13
 %define		rel		1
 
 %if %{with perf}
@@ -31,7 +31,7 @@
 %define		alt_kernel	rt
 %endif
 %if !%{with rt}
-%define		alt_kernel	%{?with_srv:server}%{!?with_srv:desktop}
+%define		alt_kernel	std
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
@@ -51,7 +51,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	cc6ee608854e0da4b64f6c1ff8b6398c
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	3aab560af4cc11bea08695468204cf4c
+# Source1-md5:	f387b5cc6663c5ba35ea116defec02be
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -61,8 +61,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.12/patch-3.12.10-rt15.patch.xz
-# Source100-md5:	400e066dbfd3a7c8eb2da558a1047ba8
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.12/patch-3.12.11-rt17.patch.xz
+# Source100-md5:	5c46965799741357e7a48c2c32735929
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
@@ -214,14 +214,18 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 %if %{with rt}
-	CONFIG_HAVE_PREEMPT_LAZY=y
-	CONFIG_PREEMPT_LAZY=y
-	CONFIG_PREEMPT_RTB=n
-	CONFIG_PREEMPT_RT_BASE=y
-	CONFIG_PREEMPT_RT_FULL=y
-	CONFIG_PREEMPT__LL=n
 	CONFIG_RWSEM_GENERIC_SPINLOCK=y
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=n
+	CONFIG_PREEMPT_RT_BASE=y
+	CONFIG_HAVE_PREEMPT_LAZY=y
+	CONFIG_PREEMPT_LAZY=y
+	CONFIG_PREEMPT__LL=n
+	CONFIG_PREEMPT_RTB=n
+	CONFIG_PREEMPT_RT_FULL=y
+	CONFIG_HWLAT_DETECTOR=m
+	CONFIG_GENERIC_TRACER=y
+	CONFIG_MISSED_TIMER_OFFSETS_HIST=y
+	CONFIG_FTRACE_STARTUP_TEST=n
 %else
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 %endif
