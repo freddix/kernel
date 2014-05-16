@@ -1,6 +1,3 @@
-# LATEST VERSION CHECKER:
-# curl -s http://www.kernel.org/kdist/finger_banner
-
 %include	/usr/lib/rpm/macros.perl
 
 %bcond_with	doc		# kernel-doc package
@@ -15,9 +12,9 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.13
-%define		postver		.0
-%define		rel		2
+%define		basever		3.14
+%define		postver		.4
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -48,10 +45,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	0ecbaf65c00374eb4a826c2f9f37606f
+# Source0-md5:	b621207b3f6ecbb67db18b13258f8ea8
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	03d34842e3a1197d17055610f62627b8
+# Source1-md5:	116f27cf17c3522716b6678b17516067
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -61,8 +58,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.12/patch-3.12.6-rt9.patch.xz
-# Source100-md5:	b6b66c250459a63664e23235153f587c
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.3-rt5.patch.xz
+# Source100-md5:	55c20f9971e1104c7e8bd45ed098555e
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
