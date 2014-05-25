@@ -8,13 +8,13 @@
 %bcond_with	uheaders	# sanitised kernel headers
 
 %bcond_with	rt		# build RT kernel
-%bcond_with	stats		# enable infrastructure required for bootchart, powertop, etc.
+%bcond_with	srv		# enable infrastructure required for bootchart, powertop, etc.
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.14
 %define		postver		.4
-%define		rel		1
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -25,10 +25,10 @@
 %endif
 
 %if %{with rt}
-%define		alt_kernel	rt%{?with_stats:_stats}
+%define		alt_kernel	rt
 %endif
 %if !%{with rt}
-%define		alt_kernel	std%{?with_stats:_stats}
+%define		alt_kernel	std
 %endif
 
 # kernel release (used in filesystem and eventually in uname -r)
@@ -211,51 +211,20 @@ BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
 %if %{with rt}
-	CONFIG_HAVE_PREEMPT_LAZY=y
-	CONFIG_PREEMPT_LAZY=y
-	CONFIG_PREEMPT_RTB=n
-	CONFIG_PREEMPT_RT_BASE=y
-	CONFIG_PREEMPT_RT_FULL=y
-	CONFIG_PREEMPT__LL=n
 	CONFIG_RWSEM_GENERIC_SPINLOCK=y
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=n
+	CONFIG_PREEMPT_RT_BASE=y
+	CONFIG_HAVE_PREEMPT_LAZY=y
+	CONFIG_PREEMPT_LAZY=y
+	CONFIG_PREEMPT__LL=n
+	CONFIG_PREEMPT_RTB=n
+	CONFIG_PREEMPT_RT_FULL=y
+	CONFIG_HWLAT_DETECTOR=m
+	CONFIG_GENERIC_TRACER=y
+	CONFIG_MISSED_TIMER_OFFSETS_HIST=y
+	CONFIG_FTRACE_STARTUP_TEST=n
 %else
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
-%endif
-%if %{with stats}
-	CONFIG_AUDIT=y
-	CONFIG_AUDITSYSCALL=y
-	CONFIG_AUDIT_WATCH=y
-	CONFIG_AUDIT_TREE=y
-	CONFIG_AUDIT_LOGINUID_IMMUTABLE=y
-	CONFIG_TRACEPOINTS=y
-	CONFIG_DEBUG_KERNEL=y
-	CONFIG_LOCKUP_DETECTOR=y
-	CONFIG_HARDLOCKUP_DETECTOR=y
-	CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC_VALUE=0
-	CONFIG_DETECT_HUNG_TASK=y
-	CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=120
-	CONFIG_BOOTPARAM_HUNG_TASK_PANIC_VALUE=0
-	CONFIG_SCHED_DEBUG=y
-	CONFIG_SCHEDSTATS=y
-	CONFIG_TIMER_STATS=y
-	CONFIG_STACKTRACE=y
-	CONFIG_NOP_TRACER=y
-	CONFIG_TRACE_CLOCK=y
-	CONFIG_RING_BUFFER=y
-	CONFIG_EVENT_TRACING=y
-	CONFIG_CONTEXT_SWITCH_TRACER=y
-	CONFIG_TRACING=y
-	CONFIG_FTRACE=y
-	CONFIG_ENABLE_DEFAULT_TRACERS=y
-	CONFIG_BRANCH_PROFILE_NONE=y
-	CONFIG_DEBUG_RODATA=y
-	CONFIG_BINARY_PRINTF=y
-%else
-	CONFIG_AUDIT=n
-	CONFIG_BINARY_PRINTF=n
-	CONFIG_DEBUG_KERNEL=n
-	CONFIG_FTRACE=n
 %endif
 	CONFIG_SQUASHFS_LZ4=y
 EOCONFIG
@@ -406,7 +375,6 @@ fi
 %{_prefix}/lib/modules/%{kernel_release}/kernel/crypto
 %{_prefix}/lib/modules/%{kernel_release}/kernel/drivers
 %{_prefix}/lib/modules/%{kernel_release}/kernel/fs
-%{_prefix}/lib/modules/%{kernel_release}/kernel/kernel
 %{_prefix}/lib/modules/%{kernel_release}/kernel/lib
 %{_prefix}/lib/modules/%{kernel_release}/kernel/mm
 %{_prefix}/lib/modules/%{kernel_release}/kernel/net
