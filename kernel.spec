@@ -14,7 +14,7 @@
 
 %define		basever		3.14
 %define		postver		.4
-%define		rel		2
+%define		rel		3
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -63,6 +63,7 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.3-
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
+Patch3:		iwlwifi.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -169,6 +170,7 @@ xz -dc %{SOURCE1} | patch -p1 -s
 # lz4 for squashfs
 #%patch1 -p1
 #%patch2 -p1
+%patch3 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
