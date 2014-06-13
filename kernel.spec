@@ -13,8 +13,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.14
-%define		postver		.4
-%define		rel		3
+%define		postver		.5
+%define		rel		1
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -48,7 +48,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	b621207b3f6ecbb67db18b13258f8ea8
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	116f27cf17c3522716b6678b17516067
+# Source1-md5:	a56bf05cb9033097198f9269bbcff130
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -120,6 +120,17 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 This package contains the Linux kernel that is used to boot and run
 your system. It contains few device drivers for specific hardware.
 Most hardware is instead supported by modules loaded after booting.
+
+%package kbuild
+Summary:	Development files for building kernel modules
+Group:		Development/Building
+Requires:	gcc
+Requires:	make
+AutoReqProv:	no
+
+%description kbuild
+Development files from kernel source tree needed to build Linux kernel
+modules from external packages.
 
 %package doc
 Summary:	Kernel documentation
@@ -298,10 +309,6 @@ touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/modules.dep
 # create directories which may be missing, to simplyfy %files
 install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/kernel/{arch,sound,mm}
 
-# rpm obeys filelinkto checks for ghosted symlinks, convert to files
-%{__rm} $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
-touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
-
 # no point embed content for %ghost files. empty them
 for a in \
 	dep{,.bin} \
@@ -318,6 +325,7 @@ done
 install -d $RPM_BUILD_ROOT/boot
 cp -a %{objdir}/System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_release}
 cp -a %{objdir}/arch/%{target_arch_dir}/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_release}
+cp -aL %{objdir}/.config $RPM_BUILD_ROOT/boot/config-%{kernel_release}
 
 %if %{with doc}
 # move to %{_docdir} so we wouldn't depend on any kernel package for dirs
@@ -329,6 +337,37 @@ mv $RPM_BUILD_ROOT{%{_kernelsrcdir}/Documentation,%{_docdir}/%{name}-%{version}}
 %{__rm} $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/*/*/Makefile
 %endif
 
+# rpm obeys filelinkto checks for ghosted symlinks, convert to files
+%{__rm} $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
+#touch $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/{build,source}
+
+cd linux-%{basever}
+install %{objdir}/.config .
+
+%{__make} \
+	%{?with_verbose:V=1} \
+	modules_prepare
+
+install -d $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/{arch/x86/kernel,kernel,include}
+install Makefile $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/Makefile
+install kernel/Makefile $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/kernel/Makefile
+install .config $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/.config
+
+for i in acpi asm-generic config crypto drm generated keys linux math-emu \
+	media net pcmcia scsi sound trace uapi video xen;
+do
+	cp -a include/${i} "$RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/include"
+done
+
+cp -a arch/x86/include $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/arch/x86
+cp arch/x86/Makefile $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/arch/x86
+cp arch/x86/kernel/asm-offsets.s $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/arch/x86/kernel
+cp -a scripts $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build
+cp -a %{objdir}/Module.symvers $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build
+
+# clean up
+%{__rm} -r $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/scripts/{ksymoops,package,rt-tester,selinux,tracing}
+find $RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernel_release}/build/scripts -name '*.o' -o -name '*.o.*' -o -name '*.cmd' -type f | xargs rm -f
 %endif
 
 %if %{with uheaders}
@@ -367,8 +406,9 @@ fi
 %if %{with kernel_build}
 %files
 %defattr(644,root,root,755)
-/boot/vmlinuz-%{kernel_release}
 /boot/System.map-%{kernel_release}
+/boot/config-%{kernel_release}
+/boot/vmlinuz-%{kernel_release}
 %{_prefix}/lib/firmware/%{kernel_release}
 
 %dir %{_prefix}/lib/modules/%{kernel_release}
@@ -396,9 +436,100 @@ fi
 %ghost %{_prefix}/lib/modules/%{kernel_release}/modules.symbols
 %ghost %{_prefix}/lib/modules/%{kernel_release}/modules.symbols.bin
 
-# symlinks pointing to kernelsrcdir
-%ghost %{_prefix}/lib/modules/%{kernel_release}/build
-%ghost %{_prefix}/lib/modules/%{kernel_release}/source
+%files kbuild
+%defattr(644,root,root,755)
+%dir %{_prefix}/lib/modules/%{kernel_release}/build
+%{_prefix}/lib/modules/%{kernel_release}/build/arch
+%{_prefix}/lib/modules/%{kernel_release}/build/include
+%{_prefix}/lib/modules/%{kernel_release}/build/kernel
+
+%{_prefix}/lib/modules/%{kernel_release}/build/.config
+%{_prefix}/lib/modules/%{kernel_release}/build/Makefile
+%{_prefix}/lib/modules/%{kernel_release}/build/Module.symvers
+
+# do we really need all that stuff to build an external module?
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/Lindent
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/asn1_compiler
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/bin2c
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/bloat-o-meter
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/cleanfile
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/cleanpatch
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccicheck
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/config
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/conmakehash
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/decodecode
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/diffconfig
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/extract-ikconfig
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/extract-vmlinux
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/gfp-translate
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kallsyms
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kernel-doc
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/makelst
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mkcompile_h
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mkmakefile
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mksysmap
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mkversion
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/patch-kernel
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/setlocalversion
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/show_delta
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/sign-file
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/sortextable
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/ver_linux
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.sh
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.c
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.h
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.lds
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.pl
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.py
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/Kbuild.include
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/Makefile*
+
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/dtc
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/fixdep
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/Makefile
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/*.c
+
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/mk_elfconfig
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/modpost
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/Makefile
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/*.c
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/*.h
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/*.s
+
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/locks
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/iterators
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/free
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/api
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/api/alloc
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/api/*.cocci
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/misc
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/null
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/coccinelle/tests
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/genksyms
+
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/conf
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.sh
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.c
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.c_shipped
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.cc
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.glade
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.gperf
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.h
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.in
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.l
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.pl
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/*.y
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/Makefile
+
+%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/lxdialog
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/lxdialog/*.sh
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/lxdialog/*.c
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/kconfig/lxdialog/*.h
 
 %if %{with doc}
 %files doc
