@@ -12,8 +12,8 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.14
-%define		postver		.5
+%define		basever		3.15
+%define		postver		.0
 %define		rel		1
 
 %if %{with perf}
@@ -45,7 +45,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	b621207b3f6ecbb67db18b13258f8ea8
+# Source0-md5:	97ca1625bb40368dc41b9a7971549071
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	a56bf05cb9033097198f9269bbcff130
@@ -63,7 +63,6 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.3-
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
-Patch3:		iwlwifi.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -181,7 +180,6 @@ xz -dc %{SOURCE1} | patch -p1 -s
 # lz4 for squashfs
 #%patch1 -p1
 #%patch2 -p1
-%patch3 -p1
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
