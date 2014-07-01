@@ -13,8 +13,8 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.15
-%define		postver		.1
-%define		rel		1
+%define		postver		.3
+%define		rel		2
 
 %if %{with perf}
 %unglobal	with_kernel_build
@@ -48,7 +48,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	97ca1625bb40368dc41b9a7971549071
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	78a944411af297b9e5e9aa430056de4c
+# Source1-md5:	a2057d9b11f013482e2a7072552f3f02
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -63,6 +63,7 @@ Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.3-
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
+Patch3:		bug77951.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -180,6 +181,9 @@ xz -dc %{SOURCE1} | patch -p1 -s
 # lz4 for squashfs
 #%patch1 -p1
 #%patch2 -p1
+
+# https://bugzilla.kernel.org/show_bug.cgi?id=77951
+%patch3 -p1 -R
 
 %if %{with rt}
 xz -dc %{SOURCE100} | patch -p1 -s
