@@ -13,7 +13,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.14
-%define		postver		.18
+%define		postver		.23
 %define		rel		1
 
 %if %{with perf}
@@ -48,7 +48,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	b621207b3f6ecbb67db18b13258f8ea8
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	f00741b35127573c3cf085fc43f6e3f0
+# Source1-md5:	45a2b9fbe6c9075093fb015f818b4e37
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -58,8 +58,8 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 # RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.12-rt9.patch.xz
-# Source100-md5:	2aa3614e488efa939007a1c428406c30
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.23-rt20.patch.xz
+# Source100-md5:	b1f9912c52f56e5e8205b28bf48fdf22
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
