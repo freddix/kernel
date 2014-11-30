@@ -7,13 +7,12 @@
 %bcond_with	perf		# performance tool
 %bcond_with	uheaders	# sanitised kernel headers
 
-%bcond_with	rt		# build RT kernel
 %bcond_with	srv		# enable infrastructure required for bootchart, powertop, etc.
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.17
-%define		postver		.2
+%define		postver		.4
 %define		rel		1
 
 %if %{with perf}
@@ -24,12 +23,7 @@
 %unglobal	with_kernel_build
 %endif
 
-%if %{with rt}
-%define		alt_kernel	rt
-%endif
-%if !%{with rt}
 %define		alt_kernel	std
-%endif
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /usr/lib/modules/%{kernel_release}
@@ -48,7 +42,7 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	fb30d0f29214d75cddd2faa94f73d5cf
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	d694b8625f834791f5e02d7c9add1406
+# Source1-md5:	df86f9de60a651ce3312af09729f7b1e
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -57,9 +51,6 @@ Source6:	kernel-config.awk
 Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
-# RT
-Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.14/patch-3.14.3-rt5.patch.xz
-# Source100-md5:	55c20f9971e1104c7e8bd45ed098555e
 Patch0:		kernel-modpost.patch
 Patch1:		lz4-comp-support.patch
 Patch2:		lz4-config-support.patch
@@ -182,11 +173,6 @@ xz -dc %{SOURCE1} | patch -p1 -s
 #%patch1 -p1
 #%patch2 -p1
 
-%if %{with rt}
-xz -dc %{SOURCE100} | patch -p1 -s
-%{__rm} localversion-rt
-%endif
-
 # Fix EXTRAVERSION in main Makefile
 %{__sed} -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
 
@@ -222,22 +208,7 @@ EOF
 BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
-%if %{with rt}
-	CONFIG_RWSEM_GENERIC_SPINLOCK=y
-	CONFIG_RWSEM_XCHGADD_ALGORITHM=n
-	CONFIG_PREEMPT_RT_BASE=y
-	CONFIG_HAVE_PREEMPT_LAZY=y
-	CONFIG_PREEMPT_LAZY=y
-	CONFIG_PREEMPT__LL=n
-	CONFIG_PREEMPT_RTB=n
-	CONFIG_PREEMPT_RT_FULL=y
-	CONFIG_HWLAT_DETECTOR=m
-	CONFIG_GENERIC_TRACER=y
-	CONFIG_MISSED_TIMER_OFFSETS_HIST=y
-	CONFIG_FTRACE_STARTUP_TEST=n
-%else
 	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
-%endif
 	CONFIG_SQUASHFS_LZ4=y
 EOCONFIG
 
