@@ -11,8 +11,8 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.17
-%define		postver		.4
+%define		basever		3.18
+%define		postver		.1
 %define		rel		1
 
 %if %{with perf}
@@ -39,10 +39,10 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	fb30d0f29214d75cddd2faa94f73d5cf
+# Source0-md5:	9e854df51ca3fef8bfe566dbd7b89241
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	df86f9de60a651ce3312af09729f7b1e
+# Source1-md5:	82864000fde42252dd5e80cceb971479
 %endif
 #
 Source3:	kernel-autoconf.h
@@ -208,7 +208,6 @@ EOF
 BuildConfig() {
 	cat <<-EOCONFIG > local.config
 	LOCALVERSION="-%{localversion}"
-	CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 	CONFIG_SQUASHFS_LZ4=y
 EOCONFIG
 
@@ -446,8 +445,6 @@ fi
 %attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/sortextable
 %attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/ver_linux
 %attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.sh
-%dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic
-%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/bin2c
 %{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.c
 %{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.h
 %{_prefix}/lib/modules/%{kernel_release}/build/scripts/*.lds
@@ -458,9 +455,10 @@ fi
 
 %{_prefix}/lib/modules/%{kernel_release}/build/scripts/dtc
 %dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic
+%attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/bin2c
 %attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/fixdep
-%{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/Makefile
 %{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/*.c
+%{_prefix}/lib/modules/%{kernel_release}/build/scripts/basic/Makefile
 
 %dir %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod
 %attr(755,root,root) %{_prefix}/lib/modules/%{kernel_release}/build/scripts/mod/mk_elfconfig
