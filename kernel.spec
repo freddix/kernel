@@ -11,8 +11,8 @@
 
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
-%define		basever		3.18
-%define		postver		.8
+%define		basever		3.19
+%define		postver		.0
 %define		rel		1
 
 %if %{with perf}
@@ -39,7 +39,7 @@ Epoch:		3
 License:	GPL v2
 Group:		Base/Kernel
 Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
-# Source0-md5:	9e854df51ca3fef8bfe566dbd7b89241
+# Source0-md5:	d3fc8316d4d4d04b65cbc2d70799e763
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
 # Source1-md5:	b7bd36ce9f4bff165ee776e2b9263257
@@ -52,8 +52,6 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 Patch0:		kernel-modpost.patch
-Patch1:		lz4-comp-support.patch
-Patch2:		lz4-config-support.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -169,9 +167,6 @@ xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
 %patch0 -p1
-# lz4 for squashfs
-#%patch1 -p1
-#%patch2 -p1
 
 # Fix EXTRAVERSION in main Makefile
 %{__sed} -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
