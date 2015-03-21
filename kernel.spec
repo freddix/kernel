@@ -12,7 +12,7 @@
 %bcond_without	kernel_build	# skip kernel build (for perf, etc.)
 
 %define		basever		3.18
-%define		postver		.8
+%define		postver		.9
 %define		rel		1
 
 %if %{with perf}
@@ -23,7 +23,7 @@
 %unglobal	with_kernel_build
 %endif
 
-%define		alt_kernel	std
+%define		alt_kernel	rt
 
 # kernel release (used in filesystem and eventually in uname -r)
 # modules will be looked from /usr/lib/modules/%{kernel_release}
@@ -42,8 +42,11 @@ Source0:	ftp://www.kernel.org/pub/linux/kernel/v3.x/linux-%{basever}.tar.xz
 # Source0-md5:	9e854df51ca3fef8bfe566dbd7b89241
 %if "%{postver}" != ".0"
 Source1:	ftp://www.kernel.org/pub/linux/kernel/v3.x/patch-%{version}.xz
-# Source1-md5:	b7bd36ce9f4bff165ee776e2b9263257
+# Source1-md5:	41077062d4b7beefd88d4df6e598e376
 %endif
+# RT
+Source100:	http://www.kernel.org/pub/linux/kernel/projects/rt/3.18/patch-3.18.9-rt5.patch.xz
+# Source100-md5:	bd00ec730968f525bd34bf277ce16496
 #
 Source3:	kernel-autoconf.h
 Source4:	kernel-config.h
@@ -52,8 +55,6 @@ Source7:	kernel-module-build.pl
 Source8:	kernel-track-config-change.awk
 Source10:	kernel.make
 Patch0:		kernel-modpost.patch
-Patch1:		lz4-comp-support.patch
-Patch2:		lz4-config-support.patch
 URL:		http://www.kernel.org/
 BuildRequires:	binutils
 BuildRequires:	/usr/sbin/depmod
@@ -168,10 +169,10 @@ cd linux-%{basever}
 xz -dc %{SOURCE1} | patch -p1 -s
 %endif
 
+xz -dc %{SOURCE100} | patch -p1 -s
+%{__rm} localversion-rt
+
 %patch0 -p1
-# lz4 for squashfs
-#%patch1 -p1
-#%patch2 -p1
 
 # Fix EXTRAVERSION in main Makefile
 %{__sed} -i 's#EXTRAVERSION =.*#EXTRAVERSION = %{_alt_kernel}#g' Makefile
